@@ -9,7 +9,9 @@ import { formatCurrency, formatDate } from '@/lib/utils'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import toast from 'react-hot-toast'
+import { Trash2 } from 'lucide-react'
 
 export default function EstoquePage() {
   const router = useRouter()
@@ -29,6 +31,11 @@ export default function EstoquePage() {
   const [lojinhaQtd, setLojinhaQtd] = useState('')
   const [lojinhaObs, setLojinhaObs] = useState('')
   const [salvandoLojinha, setSalvandoLojinha] = useState(false)
+
+  // Modais de confirmação
+  const [confirmLimparHistorico, setConfirmLimparHistorico] = useState(false)
+  const [confirmLimparSaldo, setConfirmLimparSaldo] = useState(false)
+  const [limpando, setLimpando] = useState(false)
 
   useEffect(() => {
     if (!localStorage.getItem('isAdmin')) { router.replace('/admin'); return }
@@ -93,6 +100,26 @@ export default function EstoquePage() {
     if (error) { toast.error('Erro ao registrar movimentação.'); }
     else { toast.success('Movimentação registrada!'); setLojinhaProduto(''); setLojinhaQtd(''); setLojinhaObs(''); fetchData() }
     setSalvandoLojinha(false)
+  }
+
+  async function handleLimparHistorico() {
+    setLimpando(true)
+    const supabase = createClient()
+    const { error } = await supabase.from('estoque_movimentacoes').delete().neq('id', '00000000-0000-0000-0000-000000000000')
+    if (error) { toast.error('Erro ao limpar histórico.') }
+    else { toast.success('Histórico limpo com sucesso!'); fetchData() }
+    setLimpando(false)
+    setConfirmLimparHistorico(false)
+  }
+
+  async function handleLimparSaldo() {
+    setLimpando(true)
+    const supabase = createClient()
+    const { error } = await supabase.from('estoque_movimentacoes').delete().neq('id', '00000000-0000-0000-0000-000000000000')
+    if (error) { toast.error('Erro ao zerar saldos.') }
+    else { toast.success('Saldos zerados com sucesso!'); fetchData() }
+    setLimpando(false)
+    setConfirmLimparSaldo(false)
   }
 
   const tipoLabels: Record<string, string> = {
@@ -188,7 +215,16 @@ export default function EstoquePage() {
 
         {/* Saldo atual */}
         <div className="bg-white rounded-2xl p-5 shadow-sm">
-          <h2 className="font-semibold text-gray-700 mb-4">Saldo atual por produto</h2>
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="font-semibold text-gray-700">Saldo atual por produto</h2>
+            <button
+              onClick={() => setConfirmLimparSaldo(true)}
+              className="flex items-center gap-1.5 text-xs text-red-500 hover:text-red-600 border border-red-200 hover:border-red-300 px-3 py-1.5 rounded-lg transition-colors"
+            >
+              <Trash2 size={13} />
+              Zerar saldos
+            </button>
+          </div>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
@@ -221,7 +257,16 @@ export default function EstoquePage() {
 
         {/* Histórico */}
         <div className="bg-white rounded-2xl p-5 shadow-sm">
-          <h2 className="font-semibold text-gray-700 mb-4">Histórico de movimentações</h2>
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="font-semibold text-gray-700">Histórico de movimentações</h2>
+            <button
+              onClick={() => setConfirmLimparHistorico(true)}
+              className="flex items-center gap-1.5 text-xs text-red-500 hover:text-red-600 border border-red-200 hover:border-red-300 px-3 py-1.5 rounded-lg transition-colors"
+            >
+              <Trash2 size={13} />
+              Limpar histórico
+            </button>
+          </div>
           {loading ? (
             <p className="text-gray-400">Carregando...</p>
           ) : (
@@ -260,6 +305,54 @@ export default function EstoquePage() {
           )}
         </div>
       </div>
+
+      {/* Modal: limpar histórico */}
+      <Dialog open={confirmLimparHistorico} onOpenChange={setConfirmLimparHistorico}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Limpar histórico de movimentações?</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-gray-500 mt-1">
+            Todos os registros de movimentações serão apagados permanentemente. Os saldos calculados também serão zerados. <strong>Esta ação não pode ser desfeita.</strong>
+          </p>
+          <div className="flex gap-3 mt-4">
+            <button onClick={() => setConfirmLimparHistorico(false)} className="flex-1 border border-gray-200 rounded-lg py-2.5 text-sm font-medium text-gray-600 hover:bg-gray-50">
+              Cancelar
+            </button>
+            <button
+              onClick={handleLimparHistorico}
+              disabled={limpando}
+              className="flex-1 bg-red-500 text-white rounded-lg py-2.5 text-sm font-semibold hover:bg-red-600 disabled:opacity-50"
+            >
+              {limpando ? 'Limpando...' : 'Sim, limpar tudo'}
+            </button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Modal: zerar saldos */}
+      <Dialog open={confirmLimparSaldo} onOpenChange={setConfirmLimparSaldo}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Zerar saldo de todos os produtos?</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-gray-500 mt-1">
+            O saldo é calculado a partir das movimentações. Zerar o saldo apaga <strong>todo o histórico de movimentações</strong>, incluindo entradas, saídas e ajustes. <strong>Esta ação não pode ser desfeita.</strong>
+          </p>
+          <div className="flex gap-3 mt-4">
+            <button onClick={() => setConfirmLimparSaldo(false)} className="flex-1 border border-gray-200 rounded-lg py-2.5 text-sm font-medium text-gray-600 hover:bg-gray-50">
+              Cancelar
+            </button>
+            <button
+              onClick={handleLimparSaldo}
+              disabled={limpando}
+              className="flex-1 bg-red-500 text-white rounded-lg py-2.5 text-sm font-semibold hover:bg-red-600 disabled:opacity-50"
+            >
+              {limpando ? 'Zerando...' : 'Sim, zerar tudo'}
+            </button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </AdminLayout>
   )
 }
