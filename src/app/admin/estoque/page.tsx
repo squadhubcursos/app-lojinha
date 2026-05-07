@@ -46,7 +46,7 @@ export default function EstoquePage() {
     const supabase = createClient()
     const [{ data: prods }, { data: movs }] = await Promise.all([
       supabase.from('produtos').select('*').eq('ativo', true).order('nome'),
-      supabase.from('estoque_movimentacoes').select('*, produto:produtos(nome)').order('registrado_em', { ascending: false }).limit(100),
+      supabase.from('estoque_movimentacoes').select('*, produto:produtos(nome)').order('registrado_em', { ascending: false }),
     ])
     setProdutos(prods ?? [])
     setMovimentacoes((movs ?? []) as EstoqueMovimentacao[])
@@ -61,12 +61,16 @@ export default function EstoquePage() {
       saldoEstoqueMap[m.produto_id] = (saldoEstoqueMap[m.produto_id] ?? 0) + m.quantidade
     } else if (m.tipo === 'saida_estoque') {
       saldoEstoqueMap[m.produto_id] = (saldoEstoqueMap[m.produto_id] ?? 0) - m.quantidade
-    } else if (m.tipo === 'ajuste_inventario') {
-      saldoEstoqueMap[m.produto_id] = (saldoEstoqueMap[m.produto_id] ?? 0) + m.quantidade
     } else if (m.tipo === 'entrada_lojinha') {
       saldoLojinhaMap[m.produto_id] = (saldoLojinhaMap[m.produto_id] ?? 0) + m.quantidade
     } else if (m.tipo === 'saida_lojinha') {
       saldoLojinhaMap[m.produto_id] = (saldoLojinhaMap[m.produto_id] ?? 0) - m.quantidade
+    } else if (m.tipo === 'ajuste_inventario') {
+      if (m.observacao?.includes('[lojinha]')) {
+        saldoLojinhaMap[m.produto_id] = (saldoLojinhaMap[m.produto_id] ?? 0) + m.quantidade
+      } else {
+        saldoEstoqueMap[m.produto_id] = (saldoEstoqueMap[m.produto_id] ?? 0) + m.quantidade
+      }
     }
   })
 
@@ -90,13 +94,12 @@ export default function EstoquePage() {
     if (!lojinhaProduto || !lojinhaQtd) return
     setSalvandoLojinha(true)
     const supabase = createClient()
-    const { error } = await supabase.from('estoque_movimentacoes').insert({
-      produto_id: lojinhaProduto,
-      tipo: 'entrada_lojinha',
-      quantidade: parseInt(lojinhaQtd),
-      custo_unit: null,
-      observacao: lojinhaObs || 'Transferência estoque → lojinha',
-    })
+    const qtd = parseInt(lojinhaQtd)
+    const obs = lojinhaObs || 'Transferência estoque → lojinha'
+    const { error } = await supabase.from('estoque_movimentacoes').insert([
+      { produto_id: lojinhaProduto, tipo: 'saida_estoque', quantidade: qtd, custo_unit: null, observacao: obs },
+      { produto_id: lojinhaProduto, tipo: 'entrada_lojinha', quantidade: qtd, custo_unit: null, observacao: obs },
+    ])
     if (error) { toast.error('Erro ao registrar movimentação.'); }
     else { toast.success('Movimentação registrada!'); setLojinhaProduto(''); setLojinhaQtd(''); setLojinhaObs(''); fetchData() }
     setSalvandoLojinha(false)
@@ -232,12 +235,14 @@ export default function EstoquePage() {
                   <th className="text-left py-2 text-gray-500 font-medium">Produto</th>
                   <th className="text-right py-2 text-gray-500 font-medium">Saldo Estoque</th>
                   <th className="text-right py-2 text-gray-500 font-medium">Saldo Lojinha</th>
+                  <th className="text-right py-2 text-gray-500 font-medium">Total</th>
                 </tr>
               </thead>
               <tbody>
                 {produtos.map((p) => {
                   const se = saldoEstoqueMap[p.id] ?? 0
                   const sl = saldoLojinhaMap[p.id] ?? 0
+                  const total = se + sl
                   return (
                     <tr key={p.id} className="border-b last:border-0">
                       <td className="py-2 font-medium text-gray-800">{p.nome}</td>
@@ -246,6 +251,9 @@ export default function EstoquePage() {
                       </td>
                       <td className={`py-2 text-right font-semibold ${sl < 0 ? 'text-red-500' : 'text-gray-800'}`}>
                         {sl} unid.
+                      </td>
+                      <td className={`py-2 text-right font-bold ${total < 0 ? 'text-red-500' : 'text-gray-900'}`}>
+                        {total} unid.
                       </td>
                     </tr>
                   )

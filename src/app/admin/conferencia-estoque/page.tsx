@@ -9,15 +9,11 @@ import { formatDate } from '@/lib/utils'
 import { CheckCircle, AlertTriangle, TrendingUp, TrendingDown, ChevronDown, ChevronUp } from 'lucide-react'
 import toast from 'react-hot-toast'
 
+type Aba = 'estoque' | 'lojinha'
+
 interface SaldoInfo {
   produto: Produto
   saldoSistema: number
-}
-
-interface ContadoItem {
-  produto: Produto
-  saldoSistema: number
-  contado: string
 }
 
 interface Divergencia {
@@ -32,6 +28,7 @@ interface Divergencia {
 interface Contagem {
   id: string
   produto_id: string
+  contexto: string | null
   quantidade_sistema: number
   quantidade_contada: number
   divergencia: number
@@ -42,7 +39,9 @@ interface Contagem {
 
 export default function ConferenciaEstoquePage() {
   const router = useRouter()
-  const [saldos, setSaldos] = useState<SaldoInfo[]>([])
+  const [aba, setAba] = useState<Aba>('estoque')
+  const [saldosEstoque, setSaldosEstoque] = useState<SaldoInfo[]>([])
+  const [saldosLojinha, setSaldosLojinha] = useState<SaldoInfo[]>([])
   const [contados, setContados] = useState<Record<string, string>>({})
   const [divergencias, setDivergencias] = useState<Divergencia[]>([])
   const [etapa, setEtapa] = useState<'preenchimento' | 'revisao'>('preenchimento')
@@ -56,21 +55,45 @@ export default function ConferenciaEstoquePage() {
     fetchHistorico()
   }, [router])
 
+  // Reset etapa/contados when switching tabs
+  function handleAba(nova: Aba) {
+    setAba(nova)
+    setEtapa('preenchimento')
+    setContados({})
+    setDivergencias([])
+  }
+
   async function fetchSaldos() {
     const supabase = createClient()
     const [{ data: produtos }, { data: movs }] = await Promise.all([
       supabase.from('produtos').select('*').eq('ativo', true).order('nome'),
-      supabase.from('estoque_movimentacoes').select('produto_id, tipo, quantidade'),
+      supabase.from('estoque_movimentacoes').select('produto_id, tipo, quantidade, observacao'),
     ])
 
-    const saldoMap: Record<string, number> = {}
+    const estoqueMap: Record<string, number> = {}
+    const lojinhaMap: Record<string, number> = {}
+
     ;(movs ?? []).forEach((m) => {
-      if (m.tipo === 'entrada_estoque') saldoMap[m.produto_id] = (saldoMap[m.produto_id] ?? 0) + m.quantidade
-      else if (m.tipo === 'saida_estoque') saldoMap[m.produto_id] = (saldoMap[m.produto_id] ?? 0) - m.quantidade
-      else if (m.tipo === 'ajuste_inventario') saldoMap[m.produto_id] = (saldoMap[m.produto_id] ?? 0) + m.quantidade
+      if (m.tipo === 'entrada_estoque') {
+        estoqueMap[m.produto_id] = (estoqueMap[m.produto_id] ?? 0) + m.quantidade
+      } else if (m.tipo === 'saida_estoque') {
+        estoqueMap[m.produto_id] = (estoqueMap[m.produto_id] ?? 0) - m.quantidade
+      } else if (m.tipo === 'entrada_lojinha') {
+        lojinhaMap[m.produto_id] = (lojinhaMap[m.produto_id] ?? 0) + m.quantidade
+      } else if (m.tipo === 'saida_lojinha') {
+        lojinhaMap[m.produto_id] = (lojinhaMap[m.produto_id] ?? 0) - m.quantidade
+      } else if (m.tipo === 'ajuste_inventario') {
+        if (m.observacao?.includes('[lojinha]')) {
+          lojinhaMap[m.produto_id] = (lojinhaMap[m.produto_id] ?? 0) + m.quantidade
+        } else {
+          estoqueMap[m.produto_id] = (estoqueMap[m.produto_id] ?? 0) + m.quantidade
+        }
+      }
     })
 
-    setSaldos((produtos ?? []).map((p) => ({ produto: p, saldoSistema: saldoMap[p.id] ?? 0 })))
+    const prods = produtos ?? []
+    setSaldosEstoque(prods.map((p) => ({ produto: p, saldoSistema: estoqueMap[p.id] ?? 0 })))
+    setSaldosLojinha(prods.map((p) => ({ produto: p, saldoSistema: lojinhaMap[p.id] ?? 0 })))
     setLoading(false)
   }
 
@@ -85,6 +108,7 @@ export default function ConferenciaEstoquePage() {
   }
 
   function handleGerarConferencia() {
+    const saldos = aba === 'estoque' ? saldosEstoque : saldosLojinha
     const divs: Divergencia[] = saldos.map(({ produto, saldoSistema }) => {
       const contadoVal = parseInt(contados[produto.id] ?? '0') || 0
       return {
@@ -109,11 +133,13 @@ export default function ConferenciaEstoquePage() {
 
     const supabase = createClient()
     const adminId = localStorage.getItem('admin_id') ?? null
+    const contexto = aba
 
     const { data: contagem, error: contErr } = await supabase
       .from('inventario_contagens')
       .insert({
         produto_id: item.produto.id,
+        contexto,
         quantidade_sistema: item.saldoSistema,
         quantidade_contada: item.contado,
         divergencia: item.divergencia,
@@ -134,7 +160,7 @@ export default function ConferenciaEstoquePage() {
       tipo: 'ajuste_inventario',
       quantidade: item.divergencia,
       custo_unit: null,
-      observacao: `Ajuste inventário — contagem ${contagem.id}`,
+      observacao: `[${contexto}] Ajuste inventário — contagem ${contagem.id}`,
     })
 
     if (movErr) {
@@ -153,6 +179,11 @@ export default function ConferenciaEstoquePage() {
   const comSobra = divergencias.filter((d) => d.divergencia > 0)
   const comFalta = divergencias.filter((d) => d.divergencia < 0)
 
+  const abaLabel = aba === 'estoque' ? 'Estoque' : 'Lojinha'
+  const abaDesc = aba === 'estoque'
+    ? 'Conta os produtos no almoxarifado. Compara entradas menos saídas para a lojinha.'
+    : 'Conta os produtos na prateleira. Compara o que entrou na lojinha menos as compras dos colaboradores.'
+
   return (
     <AdminLayout>
       <div className="space-y-6">
@@ -160,7 +191,7 @@ export default function ConferenciaEstoquePage() {
           <h1 className="text-2xl font-bold text-gray-800">Conferência de Estoque</h1>
           {etapa === 'revisao' && (
             <button
-              onClick={() => setEtapa('preenchimento')}
+              onClick={() => { setEtapa('preenchimento'); setContados({}) }}
               className="text-sm text-[#009ada] hover:underline"
             >
               ← Voltar ao preenchimento
@@ -168,11 +199,33 @@ export default function ConferenciaEstoquePage() {
           )}
         </div>
 
+        {/* Tabs */}
+        <div className="flex gap-1 bg-gray-100 p-1 rounded-xl w-fit">
+          {(['estoque', 'lojinha'] as Aba[]).map((a) => (
+            <button
+              key={a}
+              onClick={() => handleAba(a)}
+              className={`px-5 py-2 rounded-lg text-sm font-semibold transition-colors ${
+                aba === a
+                  ? 'bg-white text-gray-900 shadow-sm'
+                  : 'text-gray-500 hover:text-gray-700'
+              }`}
+            >
+              {a === 'estoque' ? 'Conferência do Estoque' : 'Conferência da Lojinha'}
+            </button>
+          ))}
+        </div>
+
+        {/* Description */}
+        <p className="text-sm text-gray-500 -mt-2">{abaDesc}</p>
+
         {/* ETAPA 1: Preenchimento */}
         {etapa === 'preenchimento' && (
           <div className="bg-white rounded-2xl shadow-sm overflow-hidden">
             <div className="p-5 border-b">
-              <p className="text-sm text-gray-500">Preencha a quantidade física contada para cada produto. Campos em branco serão considerados como 0.</p>
+              <p className="text-sm text-gray-500">
+                Preencha a quantidade física contada para cada produto no <strong>{abaLabel.toLowerCase()}</strong>. Campos em branco serão considerados como 0.
+              </p>
             </div>
             {loading ? (
               <div className="p-8 text-center text-gray-400">Carregando...</div>
@@ -183,12 +236,12 @@ export default function ConferenciaEstoquePage() {
                     <thead className="bg-gray-50">
                       <tr>
                         <th className="text-left px-5 py-3 text-gray-500 font-medium">Produto</th>
-                        <th className="text-right px-5 py-3 text-gray-500 font-medium">Saldo sistema</th>
+                        <th className="text-right px-5 py-3 text-gray-500 font-medium">Saldo sistema ({abaLabel})</th>
                         <th className="text-right px-5 py-3 text-gray-500 font-medium w-40">Contagem física</th>
                       </tr>
                     </thead>
                     <tbody>
-                      {saldos.map(({ produto, saldoSistema }) => (
+                      {(aba === 'estoque' ? saldosEstoque : saldosLojinha).map(({ produto, saldoSistema }) => (
                         <tr key={produto.id} className="border-t hover:bg-gray-50">
                           <td className="px-5 py-3 font-medium text-gray-800">{produto.nome}</td>
                           <td className="px-5 py-3 text-right text-gray-600">{saldoSistema} unid.</td>
@@ -223,7 +276,6 @@ export default function ConferenciaEstoquePage() {
         {/* ETAPA 2: Revisão */}
         {etapa === 'revisao' && (
           <>
-            {/* Cards de resumo */}
             <div className="grid grid-cols-3 gap-4">
               <div className="bg-green-50 border border-green-100 rounded-2xl p-4 flex items-center gap-3">
                 <CheckCircle className="text-green-500" size={28} />
@@ -248,11 +300,10 @@ export default function ConferenciaEstoquePage() {
               </div>
             </div>
 
-            {/* Tabela de divergências */}
             {(comFalta.length > 0 || comSobra.length > 0) && (
               <div className="bg-white rounded-2xl shadow-sm overflow-hidden">
                 <div className="p-5 border-b">
-                  <h2 className="font-semibold text-gray-700">Produtos com divergência</h2>
+                  <h2 className="font-semibold text-gray-700">Produtos com divergência — {abaLabel}</h2>
                   <p className="text-xs text-gray-400 mt-0.5">Confirme os ajustes individualmente para atualizar o saldo do sistema.</p>
                 </div>
                 <div className="overflow-x-auto">
@@ -303,7 +354,6 @@ export default function ConferenciaEstoquePage() {
               </div>
             )}
 
-            {/* Produtos sem divergência */}
             {semDivergencia.length > 0 && (
               <div className="bg-white rounded-2xl shadow-sm overflow-hidden">
                 <div className="p-5 border-b flex items-center gap-2">
@@ -341,6 +391,7 @@ export default function ConferenciaEstoquePage() {
                     <tr>
                       <th className="text-left px-5 py-3 text-gray-500 font-medium">Data</th>
                       <th className="text-left px-5 py-3 text-gray-500 font-medium">Produto</th>
+                      <th className="text-left px-5 py-3 text-gray-500 font-medium">Contexto</th>
                       <th className="text-right px-5 py-3 text-gray-500 font-medium">Sistema</th>
                       <th className="text-right px-5 py-3 text-gray-500 font-medium">Contado</th>
                       <th className="text-right px-5 py-3 text-gray-500 font-medium">Divergência</th>
@@ -352,6 +403,15 @@ export default function ConferenciaEstoquePage() {
                       <tr key={c.id} className="border-t hover:bg-gray-50">
                         <td className="px-5 py-3 text-gray-600">{formatDate(c.contado_em)}</td>
                         <td className="px-5 py-3 font-medium text-gray-800">{c.produto?.nome ?? '-'}</td>
+                        <td className="px-5 py-3">
+                          {c.contexto ? (
+                            <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
+                              c.contexto === 'estoque' ? 'bg-orange-50 text-orange-700' : 'bg-purple-50 text-purple-700'
+                            }`}>
+                              {c.contexto === 'estoque' ? 'Estoque' : 'Lojinha'}
+                            </span>
+                          ) : '-'}
+                        </td>
                         <td className="px-5 py-3 text-right text-gray-600">{c.quantidade_sistema}</td>
                         <td className="px-5 py-3 text-right text-gray-600">{c.quantidade_contada}</td>
                         <td className="px-5 py-3 text-right">
