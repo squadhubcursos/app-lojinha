@@ -1,5 +1,5 @@
 export type PerfilTipo = 'usuario' | 'admin'
-export type MovimentacaoTipo = 'entrada_estoque' | 'saida_estoque' | 'entrada_lojinha' | 'saida_lojinha'
+export type MovimentacaoTipo = 'entrada_estoque' | 'saida_estoque' | 'entrada_lojinha' | 'saida_lojinha' | 'ajuste_inventario'
 export type Categoria = 'bebida' | 'snack' | 'doce' | 'chiclete' | 'outro'
 
 export interface Usuario {
