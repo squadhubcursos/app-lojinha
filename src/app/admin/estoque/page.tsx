@@ -46,12 +46,21 @@ export default function EstoquePage() {
     setLoading(false)
   }
 
-  // Saldo por produto
-  const saldoMap: Record<string, number> = {}
+  // Saldos independentes por produto
+  const saldoEstoqueMap: Record<string, number> = {}
+  const saldoLojinhaMap: Record<string, number> = {}
   movimentacoes.forEach((m) => {
-    if (!saldoMap[m.produto_id]) saldoMap[m.produto_id] = 0
-    if (m.tipo === 'entrada_estoque' || m.tipo === 'entrada_lojinha') saldoMap[m.produto_id] += m.quantidade
-    else saldoMap[m.produto_id] -= m.quantidade
+    if (m.tipo === 'entrada_estoque') {
+      saldoEstoqueMap[m.produto_id] = (saldoEstoqueMap[m.produto_id] ?? 0) + m.quantidade
+    } else if (m.tipo === 'saida_estoque') {
+      saldoEstoqueMap[m.produto_id] = (saldoEstoqueMap[m.produto_id] ?? 0) - m.quantidade
+    } else if (m.tipo === 'ajuste_inventario') {
+      saldoEstoqueMap[m.produto_id] = (saldoEstoqueMap[m.produto_id] ?? 0) + m.quantidade
+    } else if (m.tipo === 'entrada_lojinha') {
+      saldoLojinhaMap[m.produto_id] = (saldoLojinhaMap[m.produto_id] ?? 0) + m.quantidade
+    } else if (m.tipo === 'saida_lojinha') {
+      saldoLojinhaMap[m.produto_id] = (saldoLojinhaMap[m.produto_id] ?? 0) - m.quantidade
+    }
   })
 
   async function handleEntradaEstoque() {
@@ -91,6 +100,7 @@ export default function EstoquePage() {
     saida_estoque: 'Saída estoque',
     entrada_lojinha: 'Entrada lojinha',
     saida_lojinha: 'Saída lojinha',
+    ajuste_inventario: 'Ajuste inventário',
   }
 
   return (
@@ -184,18 +194,26 @@ export default function EstoquePage() {
               <thead>
                 <tr className="border-b">
                   <th className="text-left py-2 text-gray-500 font-medium">Produto</th>
-                  <th className="text-right py-2 text-gray-500 font-medium">Saldo</th>
+                  <th className="text-right py-2 text-gray-500 font-medium">Saldo Estoque</th>
+                  <th className="text-right py-2 text-gray-500 font-medium">Saldo Lojinha</th>
                 </tr>
               </thead>
               <tbody>
-                {produtos.map((p) => (
-                  <tr key={p.id} className="border-b last:border-0">
-                    <td className="py-2 font-medium text-gray-800">{p.nome}</td>
-                    <td className={`py-2 text-right font-semibold ${(saldoMap[p.id] ?? 0) < 0 ? 'text-red-500' : 'text-gray-800'}`}>
-                      {saldoMap[p.id] ?? 0} unid.
-                    </td>
-                  </tr>
-                ))}
+                {produtos.map((p) => {
+                  const se = saldoEstoqueMap[p.id] ?? 0
+                  const sl = saldoLojinhaMap[p.id] ?? 0
+                  return (
+                    <tr key={p.id} className="border-b last:border-0">
+                      <td className="py-2 font-medium text-gray-800">{p.nome}</td>
+                      <td className={`py-2 text-right font-semibold ${se < 0 ? 'text-red-500' : 'text-gray-800'}`}>
+                        {se} unid.
+                      </td>
+                      <td className={`py-2 text-right font-semibold ${sl < 0 ? 'text-red-500' : 'text-gray-800'}`}>
+                        {sl} unid.
+                      </td>
+                    </tr>
+                  )
+                })}
               </tbody>
             </table>
           </div>

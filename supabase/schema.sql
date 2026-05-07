@@ -97,3 +97,21 @@ insert into usuarios (nome, perfil, senha_hash) values
 
 -- Bucket de storage para imagens de produtos
 -- Execute no dashboard do Supabase → Storage → New bucket: "produtos" (public)
+
+-- Adicionar valor ao enum de movimentações
+alter type movimentacao_tipo add value 'ajuste_inventario';
+
+-- Tabela de contagens de inventário
+create table inventario_contagens (
+  id uuid primary key default gen_random_uuid(),
+  produto_id uuid not null references produtos(id),
+  quantidade_sistema integer not null,
+  quantidade_contada integer not null,
+  divergencia integer not null,
+  ajuste_confirmado boolean not null default false,
+  contado_em timestamptz not null default now(),
+  admin_id uuid references usuarios(id)
+);
+
+alter table inventario_contagens enable row level security;
+create policy "allow_all_inventario" on inventario_contagens for all using (true) with check (true);

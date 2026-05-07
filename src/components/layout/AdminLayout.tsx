@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useRouter, usePathname } from 'next/navigation'
 import Link from 'next/link'
-import { ShoppingBag, LayoutDashboard, Package, Users, FileText, Warehouse, LogOut, Menu, X } from 'lucide-react'
+import { ShoppingBag, LayoutDashboard, Package, Users, FileText, Warehouse, LogOut, Menu, X, ClipboardList } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 interface Props {
@@ -13,6 +13,7 @@ interface Props {
 const navItems = [
   { href: '/admin/dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { href: '/admin/estoque', label: 'Estoque', icon: Warehouse },
+  { href: '/admin/conferencia-estoque', label: 'Conferência', icon: ClipboardList },
   { href: '/admin/produtos', label: 'Produtos', icon: Package },
   { href: '/admin/usuarios', label: 'Usuários', icon: Users },
   { href: '/admin/relatorios', label: 'Relatórios', icon: FileText },

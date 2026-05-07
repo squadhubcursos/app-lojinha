@@ -87,22 +87,13 @@ export default function LojaPage() {
       const { error: comprasError } = await supabase.from('compras').insert(comprasData)
       if (comprasError) throw comprasError
 
-      const movimentacoes = carrinho.flatMap((item) => [
-        {
-          produto_id: item.produto.id,
-          tipo: 'saida_lojinha' as const,
-          quantidade: item.quantidade,
-          custo_unit: null,
-          observacao: 'Venda lojinha',
-        },
-        {
-          produto_id: item.produto.id,
-          tipo: 'saida_estoque' as const,
-          quantidade: item.quantidade,
-          custo_unit: null,
-          observacao: 'Venda lojinha',
-        },
-      ])
+      const movimentacoes = carrinho.map((item) => ({
+        produto_id: item.produto.id,
+        tipo: 'saida_lojinha' as const,
+        quantidade: item.quantidade,
+        custo_unit: null,
+        observacao: 'Venda lojinha',
+      }))
 
       const { error: movError } = await supabase.from('estoque_movimentacoes').insert(movimentacoes)
       if (movError) throw movError
