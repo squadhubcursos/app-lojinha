@@ -32,8 +32,8 @@ export default function DashboardPage() {
   async function fetchData() {
     const supabase = createClient()
     const now = new Date()
-    const inicio = startOfWeek(now, { weekStartsOn: 1 })
-    const fim = endOfWeek(now, { weekStartsOn: 1 })
+    const inicio = startOfWeek(now, { weekStartsOn: 6 })
+    const fim = endOfWeek(now, { weekStartsOn: 6 })
 
     const { data } = await supabase
       .from('compras')
