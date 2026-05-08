@@ -37,6 +37,11 @@ export default function EstoquePage() {
   const [confirmLimparSaldo, setConfirmLimparSaldo] = useState(false)
   const [limpando, setLimpando] = useState(false)
 
+  // Filtros do histórico
+  const [filtroData, setFiltroData] = useState('')
+  const [filtroProduto, setFiltroProduto] = useState('todos')
+  const [filtroTipo, setFiltroTipo] = useState('todos')
+
   // Edição de movimentação
   const [editando, setEditando] = useState<EstoqueMovimentacao | null>(null)
   const [editProduto, setEditProduto] = useState('')
@@ -182,6 +187,18 @@ export default function EstoquePage() {
     ajuste_inventario: 'Ajuste inventário',
   }
 
+  const movimentacoesFiltradas = movimentacoes.filter((m) => {
+    if (filtroData) {
+      const dia = new Date(m.registrado_em).toISOString().slice(0, 10)
+      if (dia !== filtroData) return false
+    }
+    if (filtroProduto !== 'todos' && m.produto_id !== filtroProduto) return false
+    if (filtroTipo !== 'todos' && m.tipo !== filtroTipo) return false
+    return true
+  })
+
+  const filtrosAtivos = filtroData !== '' || filtroProduto !== 'todos' || filtroTipo !== 'todos'
+
   return (
     <AdminLayout>
       <div className="space-y-6">
@@ -324,6 +341,60 @@ export default function EstoquePage() {
               Limpar histórico
             </button>
           </div>
+
+          {/* Filtros */}
+          <div className="flex flex-wrap gap-3 mb-4 pb-4 border-b">
+            <div className="flex flex-col gap-1">
+              <label className="text-xs font-medium text-gray-500">Data</label>
+              <Input
+                type="date"
+                value={filtroData}
+                onChange={(e) => setFiltroData(e.target.value)}
+                className="text-sm h-9 w-40"
+              />
+            </div>
+            <div className="flex flex-col gap-1">
+              <label className="text-xs font-medium text-gray-500">Produto</label>
+              <Select value={filtroProduto} onValueChange={(v) => setFiltroProduto(v ?? 'todos')}>
+                <SelectTrigger className="h-9 w-44 text-sm">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="todos">Todos os produtos</SelectItem>
+                  {produtos.map((p) => (
+                    <SelectItem key={p.id} value={p.id}>{p.nome}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="flex flex-col gap-1">
+              <label className="text-xs font-medium text-gray-500">Tipo</label>
+              <Select value={filtroTipo} onValueChange={(v) => setFiltroTipo(v ?? 'todos')}>
+                <SelectTrigger className="h-9 w-44 text-sm">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="todos">Todos os tipos</SelectItem>
+                  <SelectItem value="entrada_estoque">Entrada estoque</SelectItem>
+                  <SelectItem value="saida_estoque">Saída estoque</SelectItem>
+                  <SelectItem value="entrada_lojinha">Entrada lojinha</SelectItem>
+                  <SelectItem value="saida_lojinha">Saída lojinha</SelectItem>
+                  <SelectItem value="ajuste_inventario">Ajuste inventário</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            {filtrosAtivos && (
+              <div className="flex flex-col gap-1 justify-end">
+                <button
+                  onClick={() => { setFiltroData(''); setFiltroProduto('todos'); setFiltroTipo('todos') }}
+                  className="h-9 px-3 text-xs text-gray-500 hover:text-gray-700 border border-gray-200 hover:border-gray-300 rounded-md transition-colors"
+                >
+                  Limpar filtros
+                </button>
+              </div>
+            )}
+          </div>
+
           {loading ? (
             <p className="text-gray-400">Carregando...</p>
           ) : (
@@ -341,7 +412,14 @@ export default function EstoquePage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {movimentacoes.map((m) => (
+                  {movimentacoesFiltradas.length === 0 ? (
+                    <tr>
+                      <td colSpan={7} className="py-6 text-center text-gray-400 text-sm">
+                        Nenhuma movimentação encontrada com os filtros aplicados.
+                      </td>
+                    </tr>
+                  ) : null}
+                  {movimentacoesFiltradas.map((m) => (
                     <tr key={m.id} className="border-b last:border-0 hover:bg-gray-50 group">
                       <td className="py-2 text-gray-600">{formatDate(m.registrado_em)}</td>
                       <td className="py-2 font-medium text-gray-800">{m.produto?.nome}</td>
