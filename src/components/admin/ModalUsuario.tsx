@@ -1,6 +1,7 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
+import Image from 'next/image'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -9,6 +10,7 @@ import { createClient } from '@/lib/supabase/client'
 import { Usuario } from '@/lib/types'
 import toast from 'react-hot-toast'
 import bcrypt from 'bcryptjs'
+import { Camera } from 'lucide-react'
 
 interface Props {
   open: boolean
@@ -23,6 +25,9 @@ export default function ModalUsuario({ open, onClose, onSaved, usuario }: Props)
   const [senha, setSenha] = useState('')
   const [ativo, setAtivo] = useState(true)
   const [salvando, setSalvando] = useState(false)
+  const [fotoPreview, setFotoPreview] = useState<string | null>(null)
+  const [fotoFile, setFotoFile] = useState<File | null>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     if (usuario) {
@@ -30,10 +35,30 @@ export default function ModalUsuario({ open, onClose, onSaved, usuario }: Props)
       setPerfil(usuario.perfil)
       setAtivo(usuario.ativo)
       setSenha('')
+      setFotoPreview(usuario.foto_url ?? null)
+      setFotoFile(null)
     } else {
       setNome(''); setPerfil('usuario'); setSenha(''); setAtivo(true)
+      setFotoPreview(null); setFotoFile(null)
     }
   }, [usuario, open])
+
+  function handleFotoChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setFotoFile(file)
+    setFotoPreview(URL.createObjectURL(file))
+  }
+
+  async function uploadFoto(file: File, usuarioId: string): Promise<string | null> {
+    const supabase = createClient()
+    const ext = file.name.split('.').pop()
+    const path = `${usuarioId}.${ext}`
+    const { error } = await supabase.storage.from('usuarios-fotos').upload(path, file, { upsert: true })
+    if (error) { toast.error('Erro ao enviar foto.'); return null }
+    const { data } = supabase.storage.from('usuarios-fotos').getPublicUrl(path)
+    return data.publicUrl
+  }
 
   async function handleSalvar() {
     if (!nome) return
@@ -47,18 +72,32 @@ export default function ModalUsuario({ open, onClose, onSaved, usuario }: Props)
     }
 
     if (usuario) {
+      if (fotoFile) {
+        const url = await uploadFoto(fotoFile, usuario.id)
+        if (url) payload.foto_url = url
+      }
       const { error } = await supabase.from('usuarios').update(payload).eq('id', usuario.id)
       if (error) { toast.error('Erro ao atualizar usuário.'); setSalvando(false); return }
       toast.success('Usuário atualizado!')
     } else {
-      const { error } = await supabase.from('usuarios').insert(payload)
-      if (error) { toast.error('Erro ao criar usuário.'); setSalvando(false); return }
+      const { data, error } = await supabase.from('usuarios').insert(payload).select().single()
+      if (error || !data) { toast.error('Erro ao criar usuário.'); setSalvando(false); return }
+      if (fotoFile) {
+        const url = await uploadFoto(fotoFile, data.id)
+        if (url) {
+          await supabase.from('usuarios').update({ foto_url: url }).eq('id', data.id)
+        }
+      }
       toast.success('Usuário criado!')
     }
 
     setSalvando(false)
     onSaved()
     onClose()
+  }
+
+  function getInitials(n: string) {
+    return n.split(' ').slice(0, 2).map((p) => p[0]).join('').toUpperCase()
   }
 
   return (
@@ -69,6 +108,32 @@ export default function ModalUsuario({ open, onClose, onSaved, usuario }: Props)
         </DialogHeader>
 
         <div className="space-y-4 mt-2">
+          {/* Foto */}
+          <div className="flex flex-col items-center gap-2">
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              className="relative w-20 h-20 rounded-full overflow-hidden border-2 border-dashed border-gray-300 hover:border-[#009ada] transition-colors group"
+            >
+              {fotoPreview ? (
+                <Image src={fotoPreview} alt="Foto" fill className="object-cover" />
+              ) : (
+                <div className="w-full h-full bg-gray-100 flex flex-col items-center justify-center text-gray-400 group-hover:text-[#009ada]">
+                  {nome ? (
+                    <span className="text-lg font-bold">{getInitials(nome)}</span>
+                  ) : (
+                    <Camera size={24} />
+                  )}
+                </div>
+              )}
+              <div className="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
+                <Camera size={18} className="text-white" />
+              </div>
+            </button>
+            <span className="text-xs text-gray-400">Clique para adicionar foto</span>
+            <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={handleFotoChange} />
+          </div>
+
           <div>
             <Label>Nome</Label>
             <Input value={nome} onChange={(e) => setNome(e.target.value)} className="mt-1" placeholder="Nome completo" />

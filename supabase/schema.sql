@@ -15,6 +15,7 @@ create table usuarios (
   nome text not null,
   perfil perfil_tipo not null default 'usuario',
   senha_hash text,
+  foto_url text,
   ativo boolean not null default true,
   criado_em timestamptz not null default now()
 );
@@ -97,6 +98,10 @@ insert into usuarios (nome, perfil, senha_hash) values
 
 -- Bucket de storage para imagens de produtos
 -- Execute no dashboard do Supabase → Storage → New bucket: "produtos" (public)
+
+-- Bucket de storage para fotos de usuários (public: true)
+-- INSERT INTO storage.buckets (id, name, public) VALUES ('usuarios-fotos', 'usuarios-fotos', true);
+-- CREATE POLICY "allow_all_usuarios_fotos" ON storage.objects FOR ALL USING (bucket_id = 'usuarios-fotos') WITH CHECK (bucket_id = 'usuarios-fotos');
 
 -- Adicionar valor ao enum de movimentações
 alter type movimentacao_tipo add value 'ajuste_inventario';

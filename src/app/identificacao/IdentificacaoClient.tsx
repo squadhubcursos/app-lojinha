@@ -2,6 +2,7 @@
 
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
+import Image from 'next/image'
 import { Usuario } from '@/lib/types'
 import { ShoppingBag } from 'lucide-react'
 
@@ -40,7 +41,6 @@ export default function IdentificacaoClient({ usuarios }: Props) {
 
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col">
-      {/* Header */}
       <header className="bg-white shadow-sm py-4 px-6 flex items-center gap-3">
         <div className="bg-[#009ada] text-white p-2 rounded-lg">
           <ShoppingBag size={24} />
@@ -48,7 +48,6 @@ export default function IdentificacaoClient({ usuarios }: Props) {
         <h1 className="text-xl font-bold text-gray-800">Banquinha SquadHub</h1>
       </header>
 
-      {/* Content */}
       <main className="flex-1 flex flex-col items-center px-4 py-10">
         <div className="w-full max-w-3xl">
           <h2 className="text-3xl font-bold text-gray-800 text-center mb-2">
@@ -70,13 +69,25 @@ export default function IdentificacaoClient({ usuarios }: Props) {
                   onClick={() => handleSelect(usuario)}
                   className="flex flex-col items-center gap-3 bg-white rounded-2xl p-5 shadow-sm hover:shadow-md hover:scale-105 transition-all duration-200 border border-gray-100 cursor-pointer"
                 >
-                  <div
-                    className={`w-14 h-14 rounded-full flex items-center justify-center text-white text-xl font-bold ${
-                      avatarColors[index % avatarColors.length]
-                    }`}
-                  >
-                    {getInitials(usuario.nome)}
-                  </div>
+                  {usuario.foto_url ? (
+                    <div className="w-16 h-16 rounded-full overflow-hidden border-2 border-gray-100">
+                      <Image
+                        src={usuario.foto_url}
+                        alt={usuario.nome}
+                        width={64}
+                        height={64}
+                        className="w-full h-full object-cover"
+                      />
+                    </div>
+                  ) : (
+                    <div
+                      className={`w-16 h-16 rounded-full flex items-center justify-center text-white text-xl font-bold ${
+                        avatarColors[index % avatarColors.length]
+                      }`}
+                    >
+                      {getInitials(usuario.nome)}
+                    </div>
+                  )}
                   <span className="text-sm font-semibold text-gray-700 text-center leading-tight">
                     {usuario.nome}
                   </span>
@@ -87,7 +98,6 @@ export default function IdentificacaoClient({ usuarios }: Props) {
         </div>
       </main>
 
-      {/* Footer */}
       <footer className="py-6 flex justify-center">
         <Link
           href="/admin"
