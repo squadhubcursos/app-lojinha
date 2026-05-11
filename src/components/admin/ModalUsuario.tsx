@@ -113,10 +113,10 @@ export default function ModalUsuario({ open, onClose, onSaved, usuario }: Props)
             <button
               type="button"
               onClick={() => fileInputRef.current?.click()}
-              className="relative w-20 h-20 rounded-full overflow-hidden border-2 border-dashed border-gray-300 hover:border-[#009ada] transition-colors group"
+              className="relative w-28 h-28 rounded-full overflow-hidden border-2 border-dashed border-gray-300 hover:border-[#009ada] transition-colors group"
             >
               {fotoPreview ? (
-                <Image src={fotoPreview} alt="Foto" fill className="object-cover" />
+                <Image src={fotoPreview} alt="Foto" fill className="object-cover object-top" />
               ) : (
                 <div className="w-full h-full bg-gray-100 flex flex-col items-center justify-center text-gray-400 group-hover:text-[#009ada]">
                   {nome ? (

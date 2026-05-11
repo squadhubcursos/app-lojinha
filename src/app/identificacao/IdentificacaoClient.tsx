@@ -70,18 +70,18 @@ export default function IdentificacaoClient({ usuarios }: Props) {
                   className="flex flex-col items-center gap-3 bg-white rounded-2xl p-5 shadow-sm hover:shadow-md hover:scale-105 transition-all duration-200 border border-gray-100 cursor-pointer"
                 >
                   {usuario.foto_url ? (
-                    <div className="w-16 h-16 rounded-full overflow-hidden border-2 border-gray-100">
+                    <div className="w-24 h-24 rounded-full overflow-hidden border-2 border-gray-100">
                       <Image
                         src={usuario.foto_url}
                         alt={usuario.nome}
-                        width={64}
-                        height={64}
-                        className="w-full h-full object-cover"
+                        width={96}
+                        height={96}
+                        className="w-full h-full object-cover object-top"
                       />
                     </div>
                   ) : (
                     <div
-                      className={`w-16 h-16 rounded-full flex items-center justify-center text-white text-xl font-bold ${
+                      className={`w-24 h-24 rounded-full flex items-center justify-center text-white text-2xl font-bold ${
                         avatarColors[index % avatarColors.length]
                       }`}
                     >

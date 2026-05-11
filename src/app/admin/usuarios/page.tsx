@@ -94,11 +94,11 @@ export default function UsuariosPage() {
                       <td className="px-4 py-3">
                         <div className="flex items-center gap-3">
                           {u.foto_url ? (
-                            <div className="w-8 h-8 rounded-full overflow-hidden flex-shrink-0">
-                              <Image src={u.foto_url} alt={u.nome} width={32} height={32} className="w-full h-full object-cover" />
+                            <div className="w-10 h-10 rounded-full overflow-hidden flex-shrink-0">
+                              <Image src={u.foto_url} alt={u.nome} width={40} height={40} className="w-full h-full object-cover" />
                             </div>
                           ) : (
-                            <div className="w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center text-xs font-bold text-gray-500 flex-shrink-0">
+                            <div className="w-10 h-10 rounded-full bg-gray-200 flex items-center justify-center text-xs font-bold text-gray-500 flex-shrink-0">
                               {getInitials(u.nome)}
                             </div>
                           )}
