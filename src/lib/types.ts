@@ -8,7 +8,6 @@ export interface Usuario {
   perfil: PerfilTipo
   ativo: boolean
   criado_em: string
-  foto_url?: string | null
 }
 
 export interface Produto {
