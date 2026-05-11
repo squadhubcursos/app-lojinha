@@ -16,6 +16,7 @@ create table usuarios (
   perfil perfil_tipo not null default 'usuario',
   senha_hash text,
   ativo boolean not null default true,
+  foto_url text,
   criado_em timestamptz not null default now()
 );
 

@@ -4,6 +4,7 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { Usuario } from '@/lib/types'
 import { ShoppingBag } from 'lucide-react'
+import Image from 'next/image'
 
 interface Props {
   usuarios: Usuario[]
@@ -71,11 +72,15 @@ export default function IdentificacaoClient({ usuarios }: Props) {
                   className="flex flex-col items-center gap-3 bg-white rounded-2xl p-5 shadow-sm hover:shadow-md hover:scale-105 transition-all duration-200 border border-gray-100 cursor-pointer"
                 >
                   <div
-                    className={`w-14 h-14 rounded-full flex items-center justify-center text-white text-xl font-bold ${
-                      avatarColors[index % avatarColors.length]
+                    className={`relative w-14 h-14 rounded-full overflow-hidden flex items-center justify-center text-white text-xl font-bold ${
+                      usuario.foto_url ? '' : avatarColors[index % avatarColors.length]
                     }`}
                   >
-                    {getInitials(usuario.nome)}
+                    {usuario.foto_url ? (
+                      <Image src={usuario.foto_url} alt={usuario.nome} fill className="object-cover" unoptimized />
+                    ) : (
+                      getInitials(usuario.nome)
+                    )}
                   </div>
                   <span className="text-sm font-semibold text-gray-700 text-center leading-tight">
                     {usuario.nome}
