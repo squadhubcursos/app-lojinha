@@ -36,7 +36,7 @@ export default function RelatoriosPage() {
     if (tipoPeriodo === 'semanal') {
       const ref = new Date(now)
       ref.setDate(ref.getDate() + semanaOffset * 7)
-      return { inicio: startOfWeek(ref, { weekStartsOn: 6 }), fim: endOfWeek(ref, { weekStartsOn: 6 }) }
+      return { inicio: startOfWeek(ref, { weekStartsOn: 5 }), fim: endOfWeek(ref, { weekStartsOn: 5 }) }
     } else {
       const ref = subMonths(now, -mesOffset)
       return { inicio: startOfMonth(ref), fim: endOfMonth(ref) }
