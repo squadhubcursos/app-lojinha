@@ -37,8 +37,8 @@ export default function HistoricoPage() {
     let fim: Date
 
     if (periodo === 'semana') {
-      inicio = startOfWeek(now, { weekStartsOn: 5 })
-      fim = endOfWeek(now, { weekStartsOn: 5 })
+      inicio = startOfWeek(now, { weekStartsOn: 6 })
+      fim = endOfWeek(now, { weekStartsOn: 6 })
     } else if (periodo === 'mes_atual') {
       inicio = startOfMonth(now)
       fim = endOfMonth(now)

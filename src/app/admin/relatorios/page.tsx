@@ -36,7 +36,7 @@ export default function RelatoriosPage() {
     if (tipoPeriodo === 'semanal') {
       const ref = new Date(now)
       ref.setDate(ref.getDate() + semanaOffset * 7)
-      return { inicio: startOfWeek(ref, { weekStartsOn: 5 }), fim: endOfWeek(ref, { weekStartsOn: 5 }) }
+      return { inicio: startOfWeek(ref, { weekStartsOn: 6 }), fim: endOfWeek(ref, { weekStartsOn: 6 }) }
     } else {
       const ref = subMonths(now, -mesOffset)
       return { inicio: startOfMonth(ref), fim: endOfMonth(ref) }
@@ -113,12 +113,13 @@ export default function RelatoriosPage() {
     if (!usuarioId || !previewAtivo) return
     setGerandoPdf(true)
     const { inicio, fim } = getRange()
+    const periodoLabel = `${format(inicio, 'dd/MM/yyyy')} a ${format(fim, 'dd/MM/yyyy')}`
 
     try {
       const res = await fetch('/api/pdf/relatorio', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ usuario_id: usuarioId, inicio: inicio.toISOString(), fim: fim.toISOString() }),
+        body: JSON.stringify({ usuario_id: usuarioId, inicio: inicio.toISOString(), fim: fim.toISOString(), periodo_label: periodoLabel }),
       })
 
       if (!res.ok) throw new Error('Erro ao gerar PDF')

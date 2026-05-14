@@ -48,7 +48,7 @@ interface CompraItem {
 }
 
 export async function POST(req: NextRequest) {
-  const { usuario_id, inicio, fim } = await req.json()
+  const { usuario_id, inicio, fim, periodo_label } = await req.json()
 
   const supabase = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -68,7 +68,7 @@ export async function POST(req: NextRequest) {
 
   const listaCompras: CompraItem[] = (compras ?? []) as CompraItem[]
   const total = listaCompras.reduce((acc: number, c: CompraItem) => acc + c.preco_unit * c.quantidade, 0)
-  const periodoLabel = `${formatDatePDF(inicio)} a ${formatDatePDF(fim)}`
+  const periodoLabel = periodo_label ?? `${formatDatePDF(inicio)} a ${formatDatePDF(fim)}`
 
   const doc = (
     <Document>
