@@ -16,7 +16,7 @@ import { Trash2, Pencil } from 'lucide-react'
 export default function EstoquePage() {
   const router = useRouter()
   const [produtos, setProdutos] = useState<Produto[]>([])
-  const [usuarios, setUsuarios] = useState<Usuario[]>([])
+  const [usuarios, setUsuarios] = useState<{ id: string; nome: string }[]>([])
   const [movimentacoes, setMovimentacoes] = useState<EstoqueMovimentacao[]>([])
   const [loading, setLoading] = useState(true)
 
@@ -525,3 +525,4 @@ export default function EstoquePage() {
     </AdminLayout>
   )
 }
+
