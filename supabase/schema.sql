@@ -120,3 +120,7 @@ create table inventario_contagens (
 
 alter table inventario_contagens enable row level security;
 create policy "allow_all_inventario" on inventario_contagens for all using (true) with check (true);
+
+-- Adicionar rastreamento de usuario nas movimentacoes (saida_lojinha)
+-- Execute este comando no SQL Editor do Supabase:
+-- ALTER TABLE estoque_movimentacoes ADD COLUMN IF NOT EXISTS usuario_id UUID REFERENCES usuarios(id);

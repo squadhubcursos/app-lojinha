@@ -24,10 +24,7 @@ export default function LojaPage() {
 
   useEffect(() => {
     const uid = localStorage.getItem('usuario_id')
-    if (!uid) {
-      router.replace('/identificacao')
-      return
-    }
+    if (!uid) { router.replace('/identificacao'); return }
     setUsuarioId(uid)
 
     async function fetchProdutos() {
@@ -77,11 +74,14 @@ export default function LojaPage() {
     const supabase = createClient()
 
     try {
+      const agora = new Date().toISOString()
+
       const comprasData = carrinho.map((item) => ({
         usuario_id: usuarioId,
         produto_id: item.produto.id,
         quantidade: item.quantidade,
         preco_unit: item.produto.preco,
+        comprado_em: agora,
       }))
 
       const { error: comprasError } = await supabase.from('compras').insert(comprasData)
@@ -93,13 +93,15 @@ export default function LojaPage() {
         quantidade: item.quantidade,
         custo_unit: null,
         observacao: 'Venda lojinha',
+        usuario_id: usuarioId,
+        registrado_em: agora,
       }))
 
       const { error: movError } = await supabase.from('estoque_movimentacoes').insert(movimentacoes)
       if (movError) throw movError
 
       localStorage.setItem('ultimo_pedido', JSON.stringify(carrinho))
-      localStorage.setItem('ultimo_pedido_horario', new Date().toISOString())
+      localStorage.setItem('ultimo_pedido_horario', agora)
       setCarrinho([])
       setCarrinhoAberto(false)
       router.push('/pedido-confirmado')
@@ -109,7 +111,7 @@ export default function LojaPage() {
     } finally {
       setConfirmando(false)
     }
-  }, [usuarioId, carrinho])
+  }, [usuarioId, carrinho, router])
 
   const totalItens = carrinho.reduce((acc, i) => acc + i.quantidade, 0)
   const totalPreco = carrinho.reduce((acc, i) => acc + i.produto.preco * i.quantidade, 0)
@@ -119,12 +121,10 @@ export default function LojaPage() {
       <div className="p-4 max-w-5xl mx-auto pb-28">
         <h2 className="text-2xl font-bold text-gray-800 mb-4">Lojinha</h2>
 
-        {/* Filtro */}
         <div className="mb-6">
           <FiltroCategoria categoriaAtiva={categoriaAtiva} onChange={setCategoriaAtiva} />
         </div>
 
-        {/* Grid de produtos */}
         {loading ? (
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
             {Array.from({ length: 8 }).map((_, i) => (
@@ -132,7 +132,7 @@ export default function LojaPage() {
             ))}
           </div>
         ) : produtosFiltrados.length === 0 ? (
-          <p className="text-center text-gray-400 py-10">Nenhum produto disponível nesta categoria.</p>
+          <p className="text-center text-gray-400 py-10">Nenhum produto disponivel nesta categoria.</p>
         ) : (
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
             {produtosFiltrados.map((produto) => (
@@ -148,14 +148,8 @@ export default function LojaPage() {
         )}
       </div>
 
-      {/* Carrinho flutuante */}
-      <CarrinhoFlutuante
-        totalItens={totalItens}
-        totalPreco={totalPreco}
-        onAbrir={() => setCarrinhoAberto(true)}
-      />
+      <CarrinhoFlutuante totalItens={totalItens} totalPreco={totalPreco} onAbrir={() => setCarrinhoAberto(true)} />
 
-      {/* Drawer do carrinho */}
       <Drawer open={carrinhoAberto} onOpenChange={setCarrinhoAberto}>
         <DrawerContent className="max-h-[85vh]">
           <DrawerHeader>
@@ -163,10 +157,7 @@ export default function LojaPage() {
           </DrawerHeader>
           <Carrinho
             itens={carrinho}
-            onAdd={(id) => {
-              const prod = produtos.find((p) => p.id === id)
-              if (prod) handleAdd(prod)
-            }}
+            onAdd={(id) => { const prod = produtos.find((p) => p.id === id); if (prod) handleAdd(prod) }}
             onRemove={handleRemove}
             onConfirmar={handleConfirmar}
             onFechar={() => setCarrinhoAberto(false)}

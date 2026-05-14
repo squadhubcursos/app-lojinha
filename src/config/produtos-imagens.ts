@@ -22,4 +22,10 @@ export const produtosImagens: Record<string, string> = {
   'Paçoquita': '/produtos/pacoquita.png',
   'Trident X': '/produtos/trident-x.png',
   'Mentos Pure': '/produtos/mentos-pure.png',
+  'Marmita 300g': '/produtos/marmita_300.png',
+  'marmita 300g': '/produtos/marmita_300.png',
+  'Marmita300g': '/produtos/marmita_300.png',
+  'Marmita 370g': '/produtos/marmita_370.png',
+  'marmita 370g': '/produtos/marmita_370.png',
+  'Marmita370g': '/produtos/marmita_370.png',
 }

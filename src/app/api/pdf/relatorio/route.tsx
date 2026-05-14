@@ -9,28 +9,13 @@ const styles = StyleSheet.create({
   title: { fontSize: 18, fontWeight: 'bold', color: '#009ada', marginBottom: 4 },
   subtitle: { fontSize: 11, color: '#666', marginBottom: 2 },
   table: { marginTop: 16 },
-  tableHeader: {
-    flexDirection: 'row',
-    backgroundColor: '#f3f4f6',
-    paddingVertical: 8,
-    paddingHorizontal: 6,
-  },
-  tableRow: {
-    flexDirection: 'row',
-    borderBottomWidth: 1,
-    borderBottomColor: '#e5e7eb',
-    paddingVertical: 6,
-    paddingHorizontal: 6,
-  },
-  tableFooter: {
-    flexDirection: 'row',
-    backgroundColor: '#e0f3fb',
-    paddingVertical: 8,
-    paddingHorizontal: 6,
-  },
-  colData: { width: '18%' },
-  colProduto: { width: '36%' },
-  colQtd: { width: '10%', textAlign: 'center' },
+  tableHeader: { flexDirection: 'row', backgroundColor: '#f3f4f6', paddingVertical: 8, paddingHorizontal: 6 },
+  tableRow: { flexDirection: 'row', borderBottomWidth: 1, borderBottomColor: '#e5e7eb', paddingVertical: 6, paddingHorizontal: 6 },
+  tableFooter: { flexDirection: 'row', backgroundColor: '#e0f3fb', paddingVertical: 8, paddingHorizontal: 6 },
+  colData: { width: '14%' },
+  colHora: { width: '10%' },
+  colProduto: { width: '32%' },
+  colQtd: { width: '8%', textAlign: 'center' },
   colPreco: { width: '18%', textAlign: 'right' },
   colSubtotal: { width: '18%', textAlign: 'right' },
   headerText: { fontWeight: 'bold', color: '#555', fontSize: 9 },
@@ -45,6 +30,13 @@ function formatCurrencyPDF(value: number): string {
 function formatDatePDF(date: string): string {
   const d = new Date(date)
   return d.toLocaleDateString('pt-BR')
+}
+
+function formatTimePDF(date: string): string {
+  const d = new Date(date)
+  const h = String(d.getHours()).padStart(2, '0')
+  const m = String(d.getMinutes()).padStart(2, '0')
+  return `${h}:${m}`
 }
 
 interface CompraItem {
@@ -75,34 +67,33 @@ export async function POST(req: NextRequest) {
   ])
 
   const listaCompras: CompraItem[] = (compras ?? []) as CompraItem[]
-  const total = listaCompras.reduce(
-    (acc: number, c: CompraItem) => acc + c.preco_unit * c.quantidade,
-    0
-  )
+  const total = listaCompras.reduce((acc: number, c: CompraItem) => acc + c.preco_unit * c.quantidade, 0)
   const periodoLabel = `${formatDatePDF(inicio)} a ${formatDatePDF(fim)}`
 
   const doc = (
     <Document>
       <Page size="A4" style={styles.page}>
         <View style={styles.header}>
-          <Text style={styles.title}>SquadHub — Relatório de Compras Lojinha</Text>
+          <Text style={styles.title}>SquadHub — Relatorio de Compras Lojinha</Text>
           <Text style={styles.subtitle}>Colaborador: {usuario?.nome ?? 'N/A'}</Text>
-          <Text style={styles.subtitle}>Período: {periodoLabel}</Text>
+          <Text style={styles.subtitle}>Periodo: {periodoLabel}</Text>
           <Text style={styles.subtitle}>Gerado em: {formatDatePDF(new Date().toISOString())}</Text>
         </View>
 
         <View style={styles.table}>
           <View style={styles.tableHeader}>
             <Text style={[styles.colData, styles.headerText]}>Data</Text>
+            <Text style={[styles.colHora, styles.headerText]}>Horario</Text>
             <Text style={[styles.colProduto, styles.headerText]}>Produto</Text>
             <Text style={[styles.colQtd, styles.headerText]}>Qtd</Text>
-            <Text style={[styles.colPreco, styles.headerText]}>Preço unit.</Text>
+            <Text style={[styles.colPreco, styles.headerText]}>Preco unit.</Text>
             <Text style={[styles.colSubtotal, styles.headerText]}>Subtotal</Text>
           </View>
 
           {listaCompras.map((c: CompraItem) => (
             <View key={c.id} style={styles.tableRow}>
               <Text style={styles.colData}>{formatDatePDF(c.comprado_em)}</Text>
+              <Text style={styles.colHora}>{formatTimePDF(c.comprado_em)}</Text>
               <Text style={styles.colProduto}>{c.produto?.nome ?? '-'}</Text>
               <Text style={styles.colQtd}>{String(c.quantidade)}</Text>
               <Text style={styles.colPreco}>{formatCurrencyPDF(c.preco_unit)}</Text>

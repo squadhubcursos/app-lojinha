@@ -1,6 +1,6 @@
 export type PerfilTipo = 'usuario' | 'admin'
 export type MovimentacaoTipo = 'entrada_estoque' | 'saida_estoque' | 'entrada_lojinha' | 'saida_lojinha' | 'ajuste_inventario'
-export type Categoria = 'bebida' | 'snack' | 'doce' | 'chiclete' | 'outro'
+export type Categoria = 'bebida' | 'snack' | 'doce' | 'chiclete' | 'marmita' | 'outro'
 
 export interface Usuario {
   id: string
@@ -40,7 +40,9 @@ export interface EstoqueMovimentacao {
   custo_unit: number | null
   observacao: string | null
   registrado_em: string
+  usuario_id?: string | null
   produto?: Produto
+  usuario?: Usuario
 }
 
 export interface ItemCarrinho {

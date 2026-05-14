@@ -51,8 +51,8 @@ export default function RelatoriosPage() {
     return format(inicio, "MMMM 'de' yyyy", { locale: ptBR })
   }
 
-  async function handleGerarPreview() {
-    if (!usuarioId) { toast.error('Selecione um usuário.'); return }
+  async function fetchCompras() {
+    if (!usuarioId) return
     setCarregando(true)
     setPreviewAtivo(false)
     const supabase = createClient()
@@ -69,6 +69,44 @@ export default function RelatoriosPage() {
     setCompras((data ?? []) as Compra[])
     setPreviewAtivo(true)
     setCarregando(false)
+  }
+
+  async function handleGerarPreview() {
+    if (!usuarioId) { toast.error('Selecione um usuario.'); return }
+    await fetchCompras()
+  }
+
+  async function handleDeleteCompra(compraId: string) {
+    const supabase = createClient()
+    const compra = compras.find((c) => c.id === compraId)
+
+    const { error } = await supabase.from('compras').delete().eq('id', compraId)
+    if (error) { toast.error('Erro ao excluir compra.'); return }
+
+    if (compra) {
+      const tsInicio = new Date(new Date(compra.comprado_em).getTime() - 60000).toISOString()
+      const tsFim = new Date(new Date(compra.comprado_em).getTime() + 60000).toISOString()
+      await supabase
+        .from('estoque_movimentacoes')
+        .delete()
+        .eq('tipo', 'saida_lojinha')
+        .eq('produto_id', compra.produto_id)
+        .eq('quantidade', compra.quantidade)
+        .gte('registrado_em', tsInicio)
+        .lte('registrado_em', tsFim)
+    }
+
+    toast.success('Compra removida.')
+    setCompras((prev) => prev.filter((c) => c.id !== compraId))
+  }
+
+  async function handleAjustarQtd(compraId: string, novaQtd: number) {
+    if (novaQtd < 1) return
+    const supabase = createClient()
+    const { error } = await supabase.from('compras').update({ quantidade: novaQtd }).eq('id', compraId)
+    if (error) { toast.error('Erro ao ajustar quantidade.'); return }
+    toast.success('Quantidade atualizada.')
+    setCompras((prev) => prev.map((c) => c.id === compraId ? { ...c, quantidade: novaQtd } : c))
   }
 
   async function handleBaixarPdf() {
@@ -106,30 +144,21 @@ export default function RelatoriosPage() {
   return (
     <AdminLayout>
       <div className="space-y-6">
-        <h1 className="text-2xl font-bold text-gray-800">Relatórios</h1>
+        <h1 className="text-2xl font-bold text-gray-800">Relatorios</h1>
 
-        {/* Filtros */}
         <div className="bg-white rounded-2xl p-5 shadow-sm space-y-4">
           <div className="grid sm:grid-cols-2 gap-4">
             <div>
-              <Label>Usuário</Label>
+              <Label>Usuario</Label>
               <Select value={usuarioId} onValueChange={(v) => setUsuarioId(v ?? '')}>
-                <SelectTrigger className="mt-1">
-                  <SelectValue placeholder="Selecione o usuário" />
-                </SelectTrigger>
-                <SelectContent>
-                  {usuarios.map((u) => (
-                    <SelectItem key={u.id} value={u.id}>{u.nome}</SelectItem>
-                  ))}
-                </SelectContent>
+                <SelectTrigger className="mt-1"><SelectValue placeholder="Selecione o usuario" /></SelectTrigger>
+                <SelectContent>{usuarios.map((u) => (<SelectItem key={u.id} value={u.id}>{u.nome}</SelectItem>))}</SelectContent>
               </Select>
             </div>
             <div>
-              <Label>Período</Label>
+              <Label>Periodo</Label>
               <Select value={tipoPeriodo} onValueChange={(v) => setTipoPeriodo(v as 'semanal' | 'mensal')}>
-                <SelectTrigger className="mt-1">
-                  <SelectValue />
-                </SelectTrigger>
+                <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="semanal">Semanal</SelectItem>
                   <SelectItem value="mensal">Mensal</SelectItem>
@@ -158,11 +187,10 @@ export default function RelatoriosPage() {
             className="flex items-center gap-2 bg-[#009ada] text-white rounded-lg px-5 py-2.5 text-sm font-semibold hover:bg-[#007bb5] disabled:opacity-50"
           >
             <FileText size={16} />
-            {carregando ? 'Carregando...' : 'Gerar prévia'}
+            {carregando ? 'Carregando...' : 'Gerar previa'}
           </button>
         </div>
 
-        {/* Preview */}
         {previewAtivo && (
           <div className="bg-white rounded-2xl shadow-sm overflow-hidden">
             <div className="flex items-center justify-between p-5 border-b">
@@ -181,9 +209,13 @@ export default function RelatoriosPage() {
             </div>
             <div className="p-5">
               {compras.length === 0 ? (
-                <p className="text-gray-400 text-sm text-center py-8">Nenhuma compra neste período.</p>
+                <p className="text-gray-400 text-sm text-center py-8">Nenhuma compra neste periodo.</p>
               ) : (
-                <TabelaRelatorio compras={compras} />
+                <TabelaRelatorio
+                  compras={compras}
+                  onDelete={handleDeleteCompra}
+                  onAjustarQtd={handleAjustarQtd}
+                />
               )}
             </div>
           </div>

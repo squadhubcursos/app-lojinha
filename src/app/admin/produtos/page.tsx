@@ -48,6 +48,7 @@ export default function ProdutosPage() {
     { value: 'snack', label: 'Snacks' },
     { value: 'doce', label: 'Doces' },
     { value: 'chiclete', label: 'Chicletes' },
+    { value: 'marmita', label: 'Marmitas' },
   ]
 
   return (

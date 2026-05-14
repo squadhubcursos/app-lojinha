@@ -37,18 +37,30 @@ export default function UsuariosPage() {
     const supabase = createClient()
     const { error } = await supabase.from('usuarios').update({ ativo: !usuario.ativo }).eq('id', usuario.id)
     if (error) { toast.error('Erro ao alterar status.') }
-    else { toast.success(usuario.ativo ? 'Usuário desativado.' : 'Usuário ativado.'); fetchUsuarios() }
+    else { toast.success(usuario.ativo ? 'Usuario desativado.' : 'Usuario ativado.'); fetchUsuarios() }
   }
 
   async function handleExcluir() {
     if (!confirmandoExclusao) return
     setExcluindo(true)
     const supabase = createClient()
+
+    const { error: comprasError } = await supabase
+      .from('compras')
+      .delete()
+      .eq('usuario_id', confirmandoExclusao.id)
+
+    if (comprasError) {
+      toast.error('Erro ao remover historico de compras do usuario.')
+      setExcluindo(false)
+      return
+    }
+
     const { error } = await supabase.from('usuarios').delete().eq('id', confirmandoExclusao.id)
     if (error) {
-      toast.error('Erro ao excluir usuário.')
+      toast.error('Erro ao excluir usuario: ' + error.message)
     } else {
-      toast.success('Usuário excluído.')
+      toast.success('Usuario excluido permanentemente.')
       fetchUsuarios()
     }
     setExcluindo(false)
@@ -63,13 +75,13 @@ export default function UsuariosPage() {
     <AdminLayout>
       <div className="space-y-6">
         <div className="flex items-center justify-between">
-          <h1 className="text-2xl font-bold text-gray-800">Usuários</h1>
+          <h1 className="text-2xl font-bold text-gray-800">Usuarios</h1>
           <button
             onClick={() => { setUsuarioEditando(null); setModalAberto(true) }}
             className="flex items-center gap-2 bg-[#009ada] text-white rounded-lg px-4 py-2 text-sm font-semibold hover:bg-[#007bb5] transition-colors"
           >
             <Plus size={16} />
-            Novo usuário
+            Novo usuario
           </button>
         </div>
 
@@ -107,7 +119,7 @@ export default function UsuariosPage() {
                       </td>
                       <td className="px-4 py-3">
                         <Badge variant={u.perfil === 'admin' ? 'default' : 'secondary'} className={u.perfil === 'admin' ? 'bg-purple-100 text-purple-700 hover:bg-purple-100' : ''}>
-                          {u.perfil === 'admin' ? 'Admin' : 'Usuário'}
+                          {u.perfil === 'admin' ? 'Admin' : 'Usuario'}
                         </Badge>
                       </td>
                       <td className="px-4 py-3">
@@ -118,22 +130,13 @@ export default function UsuariosPage() {
                       <td className="px-4 py-3 text-gray-500">{formatDate(u.criado_em)}</td>
                       <td className="px-4 py-3">
                         <div className="flex items-center gap-1 justify-end">
-                          <button
-                            onClick={() => { setUsuarioEditando(u); setModalAberto(true) }}
-                            className="p-1.5 text-gray-400 hover:text-[#009ada] transition-colors"
-                          >
+                          <button onClick={() => { setUsuarioEditando(u); setModalAberto(true) }} className="p-1.5 text-gray-400 hover:text-[#009ada] transition-colors">
                             <Pencil size={15} />
                           </button>
-                          <button
-                            onClick={() => toggleAtivo(u)}
-                            className={`p-1.5 transition-colors ${u.ativo ? 'text-gray-400 hover:text-orange-500' : 'text-gray-400 hover:text-green-500'}`}
-                          >
+                          <button onClick={() => toggleAtivo(u)} className={`p-1.5 transition-colors ${u.ativo ? 'text-gray-400 hover:text-orange-500' : 'text-gray-400 hover:text-green-500'}`}>
                             {u.ativo ? <UserX size={15} /> : <UserCheck size={15} />}
                           </button>
-                          <button
-                            onClick={() => setConfirmandoExclusao(u)}
-                            className="p-1.5 text-gray-400 hover:text-red-500 transition-colors"
-                          >
+                          <button onClick={() => setConfirmandoExclusao(u)} className="p-1.5 text-gray-400 hover:text-red-500 transition-colors">
                             <Trash2 size={15} />
                           </button>
                         </div>
@@ -147,14 +150,8 @@ export default function UsuariosPage() {
         </div>
       </div>
 
-      <ModalUsuario
-        open={modalAberto}
-        onClose={() => setModalAberto(false)}
-        onSaved={fetchUsuarios}
-        usuario={usuarioEditando}
-      />
+      <ModalUsuario open={modalAberto} onClose={() => setModalAberto(false)} onSaved={fetchUsuarios} usuario={usuarioEditando} />
 
-      {/* Modal de confirmação de exclusão */}
       {confirmandoExclusao && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-2xl shadow-xl max-w-sm w-full p-6">
@@ -163,26 +160,18 @@ export default function UsuariosPage() {
                 <Trash2 size={18} className="text-red-500" />
               </div>
               <div>
-                <h3 className="font-semibold text-gray-800">Excluir usuário</h3>
-                <p className="text-sm text-gray-500">Esta ação não pode ser desfeita.</p>
+                <h3 className="font-semibold text-gray-800">Excluir usuario</h3>
+                <p className="text-sm text-gray-500">Esta acao nao pode ser desfeita.</p>
               </div>
             </div>
             <p className="text-sm text-gray-600 mb-6">
-              Tem certeza que deseja excluir <span className="font-semibold text-gray-800">{confirmandoExclusao.nome}</span>? Todos os dados do usuário serão removidos permanentemente.
+              Tem certeza que deseja excluir <span className="font-semibold text-gray-800">{confirmandoExclusao.nome}</span>? O usuario e todo o seu historico de compras serao removidos permanentemente.
             </p>
             <div className="flex gap-3">
-              <button
-                onClick={() => setConfirmandoExclusao(null)}
-                disabled={excluindo}
-                className="flex-1 border border-gray-200 rounded-lg py-2.5 text-sm font-medium text-gray-600 hover:bg-gray-50"
-              >
+              <button onClick={() => setConfirmandoExclusao(null)} disabled={excluindo} className="flex-1 border border-gray-200 rounded-lg py-2.5 text-sm font-medium text-gray-600 hover:bg-gray-50">
                 Cancelar
               </button>
-              <button
-                onClick={handleExcluir}
-                disabled={excluindo}
-                className="flex-1 bg-red-500 text-white rounded-lg py-2.5 text-sm font-semibold hover:bg-red-600 disabled:opacity-50"
-              >
+              <button onClick={handleExcluir} disabled={excluindo} className="flex-1 bg-red-500 text-white rounded-lg py-2.5 text-sm font-semibold hover:bg-red-600 disabled:opacity-50">
                 {excluindo ? 'Excluindo...' : 'Excluir'}
               </button>
             </div>

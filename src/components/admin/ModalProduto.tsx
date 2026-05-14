@@ -24,6 +24,7 @@ export default function ModalProduto({ open, onClose, onSaved, produto }: Props)
   const [ativo, setAtivo] = useState(true)
   const [imagem, setImagem] = useState<File | null>(null)
   const [imagemPreview, setImagemPreview] = useState<string | null>(null)
+  const [imagemRemovida, setImagemRemovida] = useState(false)
   const [salvando, setSalvando] = useState(false)
   const fileRef = useRef<HTMLInputElement>(null)
 
@@ -33,16 +34,26 @@ export default function ModalProduto({ open, onClose, onSaved, produto }: Props)
       setPreco(String(produto.preco))
       setCategoria(produto.categoria)
       setAtivo(produto.ativo)
-      setImagemPreview(produto.imagem_url)
+      setImagemPreview(produto.imagem_url ?? null)
       setImagem(null)
+      setImagemRemovida(false)
     } else {
-      setNome(''); setPreco(''); setCategoria('bebida'); setAtivo(true); setImagem(null); setImagemPreview(null)
+      setNome(''); setPreco(''); setCategoria('bebida'); setAtivo(true)
+      setImagem(null); setImagemPreview(null); setImagemRemovida(false)
     }
   }, [produto, open])
 
   function handleArquivo(file: File) {
     setImagem(file)
     setImagemPreview(URL.createObjectURL(file))
+    setImagemRemovida(false)
+  }
+
+  function handleRemoverImagem(e: React.MouseEvent) {
+    e.stopPropagation()
+    setImagem(null)
+    setImagemPreview(null)
+    setImagemRemovida(true)
   }
 
   async function handleSalvar() {
@@ -50,17 +61,21 @@ export default function ModalProduto({ open, onClose, onSaved, produto }: Props)
     setSalvando(true)
     const supabase = createClient()
 
-    let imagem_url = produto?.imagem_url ?? null
+    let imagem_url: string | null = produto?.imagem_url ?? null
+
+    if (imagemRemovida) {
+      imagem_url = null
+    }
 
     if (imagem) {
       const ext = imagem.name.split('.').pop()
-      const fileName = `${Date.now()}.${ext}`
+      const fileName = `produto_${Date.now()}.${ext}`
       const { error: uploadError, data: uploadData } = await supabase.storage
         .from('produtos')
-        .upload(fileName, imagem, { upsert: true })
+        .upload(fileName, imagem, { upsert: true, contentType: imagem.type })
 
       if (uploadError) {
-        toast.error('Erro ao fazer upload da imagem.')
+        toast.error(`Erro ao fazer upload: ${uploadError.message}`)
         setSalvando(false)
         return
       }
@@ -108,7 +123,7 @@ export default function ModalProduto({ open, onClose, onSaved, produto }: Props)
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img src={imagemPreview} alt="" className="h-24 object-contain rounded-lg" />
                   <button
-                    onClick={(e) => { e.stopPropagation(); setImagem(null); setImagemPreview(null) }}
+                    onClick={handleRemoverImagem}
                     className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full w-5 h-5 flex items-center justify-center"
                   >
                     <X size={12} />
@@ -121,7 +136,7 @@ export default function ModalProduto({ open, onClose, onSaved, produto }: Props)
                 </>
               )}
             </div>
-            <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) handleArquivo(f) }} />
+            <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) handleArquivo(f); e.target.value = '' }} />
           </div>
 
           <div>
@@ -145,6 +160,7 @@ export default function ModalProduto({ open, onClose, onSaved, produto }: Props)
                   <SelectItem value="snack">Snack</SelectItem>
                   <SelectItem value="doce">Doce</SelectItem>
                   <SelectItem value="chiclete">Chiclete</SelectItem>
+                  <SelectItem value="marmita">Marmita</SelectItem>
                   <SelectItem value="outro">Outro</SelectItem>
                 </SelectContent>
               </Select>
