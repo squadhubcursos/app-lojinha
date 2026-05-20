@@ -3,13 +3,14 @@
 import { Produto } from '@/lib/types'
 import { formatCurrency } from '@/lib/utils'
 import { produtosImagens } from '@/config/produtos-imagens'
-import { Beer, Cookie, Candy, CircleDot, Package, Plus, Minus } from 'lucide-react'
+import { Beer, Cookie, Candy, CircleDot, Package, Plus, Minus, Star } from 'lucide-react'
 
 interface Props {
   produto: Produto
   quantidade: number
   onAdd: () => void
   onRemove: () => void
+  preferido?: boolean
 }
 
 function CategoriaIcon({ categoria }: { categoria: string }) {
@@ -23,7 +24,7 @@ function CategoriaIcon({ categoria }: { categoria: string }) {
   }
 }
 
-export default function ProdutoCard({ produto, quantidade, onAdd, onRemove }: Props) {
+export default function ProdutoCard({ produto, quantidade, onAdd, onRemove, preferido }: Props) {
   const imagemUrl = produto.imagem_url || produtosImagens[produto.nome] || null
 
   return (
@@ -43,6 +44,12 @@ export default function ProdutoCard({ produto, quantidade, onAdd, onRemove }: Pr
         {quantidade > 0 && (
           <div className="absolute top-2 right-2 bg-[#009ada] text-white text-xs font-bold w-5 h-5 rounded-full flex items-center justify-center">
             {quantidade}
+          </div>
+        )}
+        {preferido && (
+          <div className="absolute bottom-2 left-2 flex items-center gap-1 bg-blue-600 text-white text-[10px] font-semibold rounded-full px-2 py-0.5">
+            <Star size={10} className="fill-white" />
+            Preferidos por você
           </div>
         )}
       </div>

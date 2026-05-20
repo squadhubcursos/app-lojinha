@@ -16,6 +16,7 @@ export default function LojaPage() {
   const router = useRouter()
   const [usuarioId, setUsuarioId] = useState('')
   const [produtos, setProdutos] = useState<Produto[]>([])
+  const [preferidos, setPreferidos] = useState<Set<string>>(new Set())
   const [carrinho, setCarrinho] = useState<ItemCarrinho[]>([])
   const [categoriaAtiva, setCategoriaAtiva] = useState('todos')
   const [carrinhoAberto, setCarrinhoAberto] = useState(false)
@@ -46,7 +47,18 @@ export default function LojaPage() {
         return a.nome.localeCompare(b.nome)
       })
 
+      // Top 3 threshold: find the 3rd highest count (with tie support)
+      const uniqueCounts = [...new Set(Object.values(counts))].sort((a, b) => b - a)
+      const threshold = uniqueCounts[2] ?? uniqueCounts[uniqueCounts.length - 1]
+      const prefSet = new Set<string>()
+      if (threshold && threshold > 0) {
+        for (const [id, count] of Object.entries(counts)) {
+          if (count >= threshold) prefSet.add(id)
+        }
+      }
+
       setProdutos(sorted)
+      setPreferidos(prefSet)
       setLoading(false)
     }
     fetchProdutos()
@@ -153,6 +165,7 @@ export default function LojaPage() {
                 quantidade={getQuantidade(produto.id)}
                 onAdd={() => handleAdd(produto)}
                 onRemove={() => handleRemove(produto.id)}
+                preferido={preferidos.has(produto.id)}
               />
             ))}
           </div>
