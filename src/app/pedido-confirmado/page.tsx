@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { CheckCircle, ShoppingBag, ArrowLeft } from 'lucide-react'
 import { formatCurrency, formatDate } from '@/lib/utils'
@@ -11,6 +11,18 @@ export default function PedidoConfirmadoPage() {
   const [nomeUsuario, setNomeUsuario] = useState('')
   const [itens, setItens] = useState<ItemCarrinho[]>([])
   const [horario, setHorario] = useState('')
+  const [countdown, setCountdown] = useState(15)
+  const redirecionar = useRef(false)
+
+  function handleNovaCompra() {
+    if (redirecionar.current) return
+    redirecionar.current = true
+    localStorage.removeItem('usuario_id')
+    localStorage.removeItem('usuario_nome')
+    localStorage.removeItem('ultimo_pedido')
+    localStorage.removeItem('ultimo_pedido_horario')
+    router.push('/identificacao')
+  }
 
   useEffect(() => {
     const nome = localStorage.getItem('usuario_nome') ?? ''
@@ -27,15 +39,22 @@ export default function PedidoConfirmadoPage() {
     setHorario(horarioRaw ?? new Date().toISOString())
   }, [router])
 
-  const total = itens.reduce((acc, i) => acc + i.produto.preco * i.quantidade, 0)
+  useEffect(() => {
+    if (!nomeUsuario) return
+    const interval = setInterval(() => {
+      setCountdown((prev) => {
+        if (prev <= 1) {
+          clearInterval(interval)
+          handleNovaCompra()
+          return 0
+        }
+        return prev - 1
+      })
+    }, 1000)
+    return () => clearInterval(interval)
+  }, [nomeUsuario])
 
-  function handleNovaCompra() {
-    localStorage.removeItem('usuario_id')
-    localStorage.removeItem('usuario_nome')
-    localStorage.removeItem('ultimo_pedido')
-    localStorage.removeItem('ultimo_pedido_horario')
-    router.push('/identificacao')
-  }
+  const total = itens.reduce((acc, i) => acc + i.produto.preco * i.quantidade, 0)
 
   if (!nomeUsuario) return null
 
@@ -43,7 +62,6 @@ export default function PedidoConfirmadoPage() {
     <div className="min-h-screen bg-gray-50 flex flex-col items-center justify-center p-4">
       <div className="w-full max-w-md bg-white rounded-3xl shadow-sm overflow-hidden">
 
-        {/* Header verde de sucesso */}
         <div className="bg-[#009ada] px-6 pt-10 pb-8 flex flex-col items-center text-white">
           <div className="bg-white/20 rounded-full p-4 mb-4">
             <CheckCircle size={48} className="text-white" strokeWidth={1.5} />
@@ -54,7 +72,6 @@ export default function PedidoConfirmadoPage() {
           </p>
         </div>
 
-        {/* Resumo do pedido */}
         <div className="px-6 py-5">
           <div className="flex items-center justify-between mb-4">
             <span className="text-xs text-gray-400 uppercase tracking-wide font-medium">Resumo do pedido</span>
@@ -83,14 +100,13 @@ export default function PedidoConfirmadoPage() {
           </div>
         </div>
 
-        {/* Botões */}
         <div className="px-6 pb-6 space-y-3">
           <button
             onClick={handleNovaCompra}
             className="w-full flex items-center justify-center gap-2 bg-[#009ada] text-white font-semibold rounded-2xl py-4 text-base hover:bg-[#007bb5] transition-colors"
           >
             <ShoppingBag size={18} />
-            Iniciar nova compra
+            Iniciar nova compra · {countdown}
           </button>
           <button
             onClick={() => router.push('/historico')}

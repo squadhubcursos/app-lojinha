@@ -29,13 +29,24 @@ export default function LojaPage() {
 
     async function fetchProdutos() {
       const supabase = createClient()
-      const { data } = await supabase
-        .from('produtos')
-        .select('*')
-        .eq('ativo', true)
-        .order('categoria')
-        .order('nome')
-      setProdutos(data ?? [])
+      const [{ data }, { data: comprasData }] = await Promise.all([
+        supabase.from('produtos').select('*').eq('ativo', true),
+        supabase.from('compras').select('produto_id').eq('usuario_id', uid),
+      ])
+
+      const counts: Record<string, number> = {}
+      for (const c of comprasData ?? []) {
+        counts[c.produto_id] = (counts[c.produto_id] ?? 0) + 1
+      }
+
+      const sorted = (data ?? []).sort((a, b) => {
+        const diff = (counts[b.id] ?? 0) - (counts[a.id] ?? 0)
+        if (diff !== 0) return diff
+        if (a.categoria !== b.categoria) return a.categoria.localeCompare(b.categoria)
+        return a.nome.localeCompare(b.nome)
+      })
+
+      setProdutos(sorted)
       setLoading(false)
     }
     fetchProdutos()
