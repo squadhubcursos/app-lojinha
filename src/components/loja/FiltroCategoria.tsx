@@ -1,4 +1,4 @@
-'use client'
+﻿'use client'
 
 import { cn } from '@/lib/utils'
 
@@ -13,7 +13,6 @@ const categorias = [
   { value: 'snack', label: 'Snacks' },
   { value: 'doce', label: 'Doces' },
   { value: 'chiclete', label: 'Chicletes' },
-  { value: 'marmita', label: 'Marmitas' },
 ]
 
 export default function FiltroCategoria({ categoriaAtiva, onChange }: Props) {
