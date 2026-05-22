@@ -200,14 +200,14 @@ export default function MarmitasPage() {
               <div key={linha.id} className="grid grid-cols-[1fr_1fr_80px_140px_36px] gap-2 items-end">
                 <div>
                   {idx === 0 && <Label className="mb-1 block text-xs">Usuário</Label>}
-                  <Select value={linha.usuarioId} onValueChange={(v) => updateLinha(linha.id, 'usuarioId', v)}>
+                  <Select value={linha.usuarioId} onValueChange={(v) => updateLinha(linha.id, 'usuarioId', v ?? '')}>
                     <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
                     <SelectContent>{usuarios.map((u) => <SelectItem key={u.id} value={u.id}>{u.nome}</SelectItem>)}</SelectContent>
                   </Select>
                 </div>
                 <div>
                   {idx === 0 && <Label className="mb-1 block text-xs">Marmita</Label>}
-                  <Select value={linha.produtoId} onValueChange={(v) => updateLinha(linha.id, 'produtoId', v)}>
+                  <Select value={linha.produtoId} onValueChange={(v) => updateLinha(linha.id, 'produtoId', v ?? '')}>
                     <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
                     <SelectContent>{marmitas.map((m) => <SelectItem key={m.id} value={m.id}>{m.nome}</SelectItem>)}</SelectContent>
                   </Select>
