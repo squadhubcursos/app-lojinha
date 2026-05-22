@@ -1,4 +1,4 @@
-'use client'
+﻿'use client'
 
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
@@ -6,7 +6,7 @@ import { createClient } from '@/lib/supabase/client'
 import AdminLayout from '@/components/layout/AdminLayout'
 import { Produto } from '@/lib/types'
 import { formatDate } from '@/lib/utils'
-import { CheckCircle, AlertTriangle, TrendingUp, TrendingDown, ChevronDown, ChevronUp } from 'lucide-react'
+import { CheckCircle, TrendingUp, TrendingDown, ChevronDown, ChevronUp, Check, X, Trash2 } from 'lucide-react'
 import toast from 'react-hot-toast'
 
 type Aba = 'estoque' | 'lojinha'
@@ -37,17 +37,28 @@ interface Contagem {
   produto?: { nome: string }
 }
 
+type LojinhaStatus = 'idle' | 'ok' | 'divergencia' | 'registrado'
+
 export default function ConferenciaEstoquePage() {
   const router = useRouter()
   const [aba, setAba] = useState<Aba>('estoque')
   const [saldosEstoque, setSaldosEstoque] = useState<SaldoInfo[]>([])
   const [saldosLojinha, setSaldosLojinha] = useState<SaldoInfo[]>([])
+
+  // Estoque tab
   const [contados, setContados] = useState<Record<string, string>>({})
   const [divergencias, setDivergencias] = useState<Divergencia[]>([])
   const [etapa, setEtapa] = useState<'preenchimento' | 'revisao'>('preenchimento')
+
+  // Lojinha tab
+  const [lojinhaStatus, setLojinhaStatus] = useState<Record<string, LojinhaStatus>>({})
+  const [lojinhaDivInput, setLojinhaDivInput] = useState<Record<string, string>>({})
+  const [lojinhaRegistrando, setLojinhaRegistrando] = useState<Record<string, boolean>>({})
+
   const [historico, setHistorico] = useState<Contagem[]>([])
   const [historicoAberto, setHistoricoAberto] = useState(false)
   const [loading, setLoading] = useState(true)
+  const [excluindoHistorico, setExcluindoHistorico] = useState<string | null>(null)
 
   useEffect(() => {
     if (!localStorage.getItem('isAdmin')) { router.replace('/admin'); return }
@@ -55,7 +66,6 @@ export default function ConferenciaEstoquePage() {
     fetchHistorico()
   }, [router])
 
-  // Reset etapa/contados when switching tabs
   function handleAba(nova: Aba) {
     setAba(nova)
     setEtapa('preenchimento')
@@ -103,22 +113,15 @@ export default function ConferenciaEstoquePage() {
       .from('inventario_contagens')
       .select('*, produto:produtos(nome)')
       .order('contado_em', { ascending: false })
-      .limit(50)
+      .limit(100)
     setHistorico((data ?? []) as Contagem[])
   }
 
+  // --- Estoque tab ---
   function handleGerarConferencia() {
-    const saldos = aba === 'estoque' ? saldosEstoque : saldosLojinha
-    const divs: Divergencia[] = saldos.map(({ produto, saldoSistema }) => {
+    const divs: Divergencia[] = saldosEstoque.map(({ produto, saldoSistema }) => {
       const contadoVal = parseInt(contados[produto.id] ?? '0') || 0
-      return {
-        produto,
-        saldoSistema,
-        contado: contadoVal,
-        divergencia: contadoVal - saldoSistema,
-        confirmado: false,
-        confirmando: false,
-      }
+      return { produto, saldoSistema, contado: contadoVal, divergencia: contadoVal - saldoSistema, confirmado: false, confirmando: false }
     })
     setDivergencias(divs)
     setEtapa('revisao')
@@ -128,46 +131,23 @@ export default function ConferenciaEstoquePage() {
   async function handleConfirmarAjuste(idx: number) {
     const item = divergencias[idx]
     if (item.divergencia === 0) return
-
     setDivergencias((prev) => prev.map((d, i) => i === idx ? { ...d, confirmando: true } : d))
-
     const supabase = createClient()
     const adminId = localStorage.getItem('admin_id') ?? null
-    const contexto = aba
 
     const { data: contagem, error: contErr } = await supabase
       .from('inventario_contagens')
-      .insert({
-        produto_id: item.produto.id,
-        contexto,
-        quantidade_sistema: item.saldoSistema,
-        quantidade_contada: item.contado,
-        divergencia: item.divergencia,
-        ajuste_confirmado: true,
-        admin_id: adminId,
-      })
-      .select()
-      .single()
+      .insert({ produto_id: item.produto.id, contexto: 'estoque', quantidade_sistema: item.saldoSistema, quantidade_contada: item.contado, divergencia: item.divergencia, ajuste_confirmado: true, admin_id: adminId })
+      .select().single()
 
-    if (contErr) {
-      toast.error('Erro ao salvar contagem.')
-      setDivergencias((prev) => prev.map((d, i) => i === idx ? { ...d, confirmando: false } : d))
-      return
-    }
+    if (contErr) { toast.error('Erro ao salvar contagem.'); setDivergencias((prev) => prev.map((d, i) => i === idx ? { ...d, confirmando: false } : d)); return }
 
     const { error: movErr } = await supabase.from('estoque_movimentacoes').insert({
-      produto_id: item.produto.id,
-      tipo: 'ajuste_inventario',
-      quantidade: item.divergencia,
-      custo_unit: null,
-      observacao: `[${contexto}] Ajuste inventário — contagem ${contagem.id}`,
+      produto_id: item.produto.id, tipo: 'ajuste_inventario', quantidade: item.divergencia, custo_unit: null,
+      observacao: `[estoque] Ajuste inventário — contagem ${contagem.id}`,
     })
 
-    if (movErr) {
-      toast.error('Erro ao registrar ajuste.')
-      setDivergencias((prev) => prev.map((d, i) => i === idx ? { ...d, confirmando: false } : d))
-      return
-    }
+    if (movErr) { toast.error('Erro ao registrar ajuste.'); setDivergencias((prev) => prev.map((d, i) => i === idx ? { ...d, confirmando: false } : d)); return }
 
     toast.success(`Ajuste confirmado: ${item.produto.nome}`)
     setDivergencias((prev) => prev.map((d, i) => i === idx ? { ...d, confirmado: true, confirmando: false } : d))
@@ -175,209 +155,281 @@ export default function ConferenciaEstoquePage() {
     fetchSaldos()
   }
 
+  // --- Lojinha tab ---
+  async function handleLojinhaRegistrar(produtoId: string, saldoSistema: number) {
+    const divStr = lojinhaDivInput[produtoId] ?? ''
+    const divVal = parseInt(divStr)
+    if (isNaN(divVal)) { toast.error('Insira a divergência.'); return }
+
+    setLojinhaRegistrando((prev) => ({ ...prev, [produtoId]: true }))
+    const supabase = createClient()
+    const adminId = localStorage.getItem('admin_id') ?? null
+    const contadoVal = saldoSistema + divVal
+
+    const { data: contagem, error: contErr } = await supabase
+      .from('inventario_contagens')
+      .insert({ produto_id: produtoId, contexto: 'lojinha', quantidade_sistema: saldoSistema, quantidade_contada: contadoVal, divergencia: divVal, ajuste_confirmado: true, admin_id: adminId })
+      .select().single()
+
+    if (contErr) { toast.error('Erro ao salvar contagem.'); setLojinhaRegistrando((prev) => ({ ...prev, [produtoId]: false })); return }
+
+    const { error: movErr } = await supabase.from('estoque_movimentacoes').insert({
+      produto_id: produtoId, tipo: 'ajuste_inventario', quantidade: divVal, custo_unit: null,
+      observacao: `[lojinha] Ajuste inventário — contagem ${contagem.id}`,
+    })
+
+    if (movErr) { toast.error('Erro ao registrar ajuste.'); setLojinhaRegistrando((prev) => ({ ...prev, [produtoId]: false })); return }
+
+    toast.success('Divergência registrada!')
+    setLojinhaStatus((prev) => ({ ...prev, [produtoId]: 'registrado' }))
+    setLojinhaRegistrando((prev) => ({ ...prev, [produtoId]: false }))
+    fetchHistorico()
+    fetchSaldos()
+  }
+
+  async function handleDeleteHistorico(contagem: Contagem) {
+    setExcluindoHistorico(contagem.id)
+    const supabase = createClient()
+    await supabase.from('estoque_movimentacoes').delete().like('observacao', `%contagem ${contagem.id}%`)
+    const { error } = await supabase.from('inventario_contagens').delete().eq('id', contagem.id)
+    if (error) { toast.error('Erro ao excluir.') }
+    else { toast.success('Registro excluído.'); setHistorico((prev) => prev.filter((c) => c.id !== contagem.id)) }
+    setExcluindoHistorico(null)
+    fetchSaldos()
+  }
+
   const semDivergencia = divergencias.filter((d) => d.divergencia === 0)
   const comSobra = divergencias.filter((d) => d.divergencia > 0)
   const comFalta = divergencias.filter((d) => d.divergencia < 0)
-
-  const abaLabel = aba === 'estoque' ? 'Estoque' : 'Lojinha'
-  const abaDesc = aba === 'estoque'
-    ? 'Conta os produtos no almoxarifado. Compara entradas menos saídas para a lojinha.'
-    : 'Conta os produtos na prateleira. Compara o que entrou na lojinha menos as compras dos colaboradores.'
 
   return (
     <AdminLayout>
       <div className="space-y-6">
         <div className="flex items-center justify-between">
           <h1 className="text-2xl font-bold text-gray-800">Conferência de Estoque</h1>
-          {etapa === 'revisao' && (
-            <button
-              onClick={() => { setEtapa('preenchimento'); setContados({}) }}
-              className="text-sm text-[#009ada] hover:underline"
-            >
+          {aba === 'estoque' && etapa === 'revisao' && (
+            <button onClick={() => { setEtapa('preenchimento'); setContados({}) }} className="text-sm text-[#009ada] hover:underline">
               ← Voltar ao preenchimento
             </button>
           )}
         </div>
 
-        {/* Tabs */}
         <div className="flex gap-1 bg-gray-100 p-1 rounded-xl w-fit">
           {(['estoque', 'lojinha'] as Aba[]).map((a) => (
-            <button
-              key={a}
-              onClick={() => handleAba(a)}
-              className={`px-5 py-2 rounded-lg text-sm font-semibold transition-colors ${
-                aba === a
-                  ? 'bg-white text-gray-900 shadow-sm'
-                  : 'text-gray-500 hover:text-gray-700'
-              }`}
-            >
+            <button key={a} onClick={() => handleAba(a)}
+              className={`px-5 py-2 rounded-lg text-sm font-semibold transition-colors ${aba === a ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>
               {a === 'estoque' ? 'Conferência do Estoque' : 'Conferência da Lojinha'}
             </button>
           ))}
         </div>
 
-        {/* Description */}
-        <p className="text-sm text-gray-500 -mt-2">{abaDesc}</p>
-
-        {/* ETAPA 1: Preenchimento */}
-        {etapa === 'preenchimento' && (
-          <div className="bg-white rounded-2xl shadow-sm overflow-hidden">
-            <div className="p-5 border-b">
-              <p className="text-sm text-gray-500">
-                Preencha a quantidade física contada para cada produto no <strong>{abaLabel.toLowerCase()}</strong>. Campos em branco serão considerados como 0.
-              </p>
-            </div>
-            {loading ? (
-              <div className="p-8 text-center text-gray-400">Carregando...</div>
-            ) : (
-              <>
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm">
-                    <thead className="bg-gray-50">
-                      <tr>
-                        <th className="text-left px-5 py-3 text-gray-500 font-medium">Produto</th>
-                        <th className="text-right px-5 py-3 text-gray-500 font-medium">Saldo sistema ({abaLabel})</th>
-                        <th className="text-right px-5 py-3 text-gray-500 font-medium w-40">Contagem física</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {(aba === 'estoque' ? saldosEstoque : saldosLojinha).map(({ produto, saldoSistema }) => (
-                        <tr key={produto.id} className="border-t hover:bg-gray-50">
-                          <td className="px-5 py-3 font-medium text-gray-800">{produto.nome}</td>
-                          <td className="px-5 py-3 text-right text-gray-600">{saldoSistema} unid.</td>
-                          <td className="px-5 py-3 text-right">
-                            <input
-                              type="number"
-                              min="0"
-                              value={contados[produto.id] ?? ''}
-                              onChange={(e) => setContados((prev) => ({ ...prev, [produto.id]: e.target.value }))}
-                              placeholder="0"
-                              className="w-24 border border-gray-200 rounded-lg px-3 py-1.5 text-right text-sm focus:outline-none focus:ring-2 focus:ring-[#009ada]/30 focus:border-[#009ada]"
-                            />
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-                <div className="p-5 border-t">
-                  <button
-                    onClick={handleGerarConferencia}
-                    className="bg-[#009ada] text-white font-semibold px-6 py-3 rounded-xl hover:bg-[#007bb5] transition-colors"
-                  >
-                    Gerar conferência
-                  </button>
-                </div>
-              </>
-            )}
-          </div>
-        )}
-
-        {/* ETAPA 2: Revisão */}
-        {etapa === 'revisao' && (
+        {/* ESTOQUE TAB */}
+        {aba === 'estoque' && (
           <>
-            <div className="grid grid-cols-3 gap-4">
-              <div className="bg-green-50 border border-green-100 rounded-2xl p-4 flex items-center gap-3">
-                <CheckCircle className="text-green-500" size={28} />
-                <div>
-                  <p className="text-2xl font-bold text-green-700">{semDivergencia.length}</p>
-                  <p className="text-xs text-green-600 font-medium">Sem divergência</p>
-                </div>
-              </div>
-              <div className="bg-blue-50 border border-blue-100 rounded-2xl p-4 flex items-center gap-3">
-                <TrendingUp className="text-blue-500" size={28} />
-                <div>
-                  <p className="text-2xl font-bold text-blue-700">{comSobra.length}</p>
-                  <p className="text-xs text-blue-600 font-medium">Com sobra</p>
-                </div>
-              </div>
-              <div className="bg-red-50 border border-red-100 rounded-2xl p-4 flex items-center gap-3">
-                <TrendingDown className="text-red-500" size={28} />
-                <div>
-                  <p className="text-2xl font-bold text-red-700">{comFalta.length}</p>
-                  <p className="text-xs text-red-600 font-medium">Com falta</p>
-                </div>
-              </div>
-            </div>
+            <p className="text-sm text-gray-500 -mt-2">Conta os produtos no almoxarifado. Compara entradas menos saídas para a lojinha.</p>
 
-            {(comFalta.length > 0 || comSobra.length > 0) && (
+            {etapa === 'preenchimento' && (
               <div className="bg-white rounded-2xl shadow-sm overflow-hidden">
                 <div className="p-5 border-b">
-                  <h2 className="font-semibold text-gray-700">Produtos com divergência — {abaLabel}</h2>
-                  <p className="text-xs text-gray-400 mt-0.5">Confirme os ajustes individualmente para atualizar o saldo do sistema.</p>
+                  <p className="text-sm text-gray-500">Preencha a quantidade física contada para cada produto. Campos em branco serão considerados como 0.</p>
                 </div>
+                {loading ? <div className="p-8 text-center text-gray-400">Carregando...</div> : (
+                  <>
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-sm">
+                        <thead className="bg-gray-50">
+                          <tr>
+                            <th className="text-left px-5 py-3 text-gray-500 font-medium">Produto</th>
+                            <th className="text-right px-5 py-3 text-gray-500 font-medium">Saldo sistema</th>
+                            <th className="text-right px-5 py-3 text-gray-500 font-medium w-40">Contagem física</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {saldosEstoque.map(({ produto, saldoSistema }) => (
+                            <tr key={produto.id} className="border-t hover:bg-gray-50">
+                              <td className="px-5 py-3 font-medium text-gray-800">{produto.nome}</td>
+                              <td className="px-5 py-3 text-right text-gray-600">{saldoSistema} unid.</td>
+                              <td className="px-5 py-3 text-right">
+                                <input type="number" min="0" value={contados[produto.id] ?? ''} onChange={(e) => setContados((prev) => ({ ...prev, [produto.id]: e.target.value }))} placeholder="0"
+                                  className="w-24 border border-gray-200 rounded-lg px-3 py-1.5 text-right text-sm focus:outline-none focus:ring-2 focus:ring-[#009ada]/30 focus:border-[#009ada]" />
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                    <div className="p-5 border-t">
+                      <button onClick={handleGerarConferencia} className="bg-[#009ada] text-white font-semibold px-6 py-3 rounded-xl hover:bg-[#007bb5] transition-colors">
+                        Gerar conferência
+                      </button>
+                    </div>
+                  </>
+                )}
+              </div>
+            )}
+
+            {etapa === 'revisao' && (
+              <>
+                <div className="grid grid-cols-3 gap-4">
+                  <div className="bg-green-50 border border-green-100 rounded-2xl p-4 flex items-center gap-3">
+                    <CheckCircle className="text-green-500" size={28} />
+                    <div><p className="text-2xl font-bold text-green-700">{semDivergencia.length}</p><p className="text-xs text-green-600 font-medium">Sem divergência</p></div>
+                  </div>
+                  <div className="bg-blue-50 border border-blue-100 rounded-2xl p-4 flex items-center gap-3">
+                    <TrendingUp className="text-blue-500" size={28} />
+                    <div><p className="text-2xl font-bold text-blue-700">{comSobra.length}</p><p className="text-xs text-blue-600 font-medium">Com sobra</p></div>
+                  </div>
+                  <div className="bg-red-50 border border-red-100 rounded-2xl p-4 flex items-center gap-3">
+                    <TrendingDown className="text-red-500" size={28} />
+                    <div><p className="text-2xl font-bold text-red-700">{comFalta.length}</p><p className="text-xs text-red-600 font-medium">Com falta</p></div>
+                  </div>
+                </div>
+
+                {(comFalta.length > 0 || comSobra.length > 0) && (
+                  <div className="bg-white rounded-2xl shadow-sm overflow-hidden">
+                    <div className="p-5 border-b">
+                      <h2 className="font-semibold text-gray-700">Produtos com divergência — Estoque</h2>
+                      <p className="text-xs text-gray-400 mt-0.5">Confirme os ajustes individualmente para atualizar o saldo do sistema.</p>
+                    </div>
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-sm">
+                        <thead className="bg-gray-50">
+                          <tr>
+                            <th className="text-left px-5 py-3 text-gray-500 font-medium">Produto</th>
+                            <th className="text-right px-5 py-3 text-gray-500 font-medium">Saldo sistema</th>
+                            <th className="text-right px-5 py-3 text-gray-500 font-medium">Contagem hoje</th>
+                            <th className="text-right px-5 py-3 text-gray-500 font-medium">Divergência</th>
+                            <th className="px-5 py-3"></th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {divergencias.map((d, idx) => ({ ...d, idx })).filter((d) => d.divergencia !== 0).map((d) => (
+                            <tr key={d.produto.id} className="border-t hover:bg-gray-50">
+                              <td className="px-5 py-3 font-medium text-gray-800">{d.produto.nome}</td>
+                              <td className="px-5 py-3 text-right text-gray-600">{d.saldoSistema}</td>
+                              <td className="px-5 py-3 text-right text-gray-600">{d.contado}</td>
+                              <td className="px-5 py-3 text-right">
+                                <span className={`font-bold ${d.divergencia > 0 ? 'text-blue-600' : 'text-red-500'}`}>
+                                  {d.divergencia > 0 ? '+' : ''}{d.divergencia}
+                                </span>
+                              </td>
+                              <td className="px-5 py-3 text-right">
+                                {d.confirmado ? (
+                                  <span className="text-xs text-green-600 font-medium flex items-center gap-1 justify-end"><CheckCircle size={14} /> Ajustado</span>
+                                ) : (
+                                  <button onClick={() => handleConfirmarAjuste(d.idx)} disabled={d.confirmando}
+                                    className="text-xs bg-gray-800 text-white px-3 py-1.5 rounded-lg hover:bg-gray-700 disabled:opacity-50 transition-colors">
+                                    {d.confirmando ? 'Salvando...' : 'Confirmar ajuste'}
+                                  </button>
+                                )}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
+
+                {semDivergencia.length > 0 && (
+                  <div className="bg-white rounded-2xl shadow-sm overflow-hidden">
+                    <div className="p-5 border-b flex items-center gap-2">
+                      <CheckCircle className="text-green-500" size={18} />
+                      <h2 className="font-semibold text-gray-700">Produtos sem divergência ({semDivergencia.length})</h2>
+                    </div>
+                    <div className="px-5 py-3 flex flex-wrap gap-2">
+                      {semDivergencia.map((d) => (
+                        <span key={d.produto.id} className="text-xs bg-green-50 text-green-700 px-3 py-1 rounded-full border border-green-100">{d.produto.nome}</span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </>
+            )}
+          </>
+        )}
+
+        {/* LOJINHA TAB */}
+        {aba === 'lojinha' && (
+          <>
+            <p className="text-sm text-gray-500 -mt-2">Confira os produtos na prateleira. Marque ✓ se o saldo bate, ou ✗ para registrar uma divergência.</p>
+
+            <div className="bg-white rounded-2xl shadow-sm overflow-hidden">
+              {loading ? <div className="p-8 text-center text-gray-400">Carregando...</div> : (
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm">
                     <thead className="bg-gray-50">
                       <tr>
                         <th className="text-left px-5 py-3 text-gray-500 font-medium">Produto</th>
                         <th className="text-right px-5 py-3 text-gray-500 font-medium">Saldo sistema</th>
-                        <th className="text-right px-5 py-3 text-gray-500 font-medium">Contagem hoje</th>
-                        <th className="text-right px-5 py-3 text-gray-500 font-medium">Divergência</th>
-                        <th className="px-5 py-3"></th>
+                        <th className="px-5 py-3 text-gray-500 font-medium text-center w-72">Conferência</th>
                       </tr>
                     </thead>
                     <tbody>
-                      {divergencias
-                        .map((d, idx) => ({ ...d, idx }))
-                        .filter((d) => d.divergencia !== 0)
-                        .map((d) => (
-                          <tr key={d.produto.id} className="border-t hover:bg-gray-50">
-                            <td className="px-5 py-3 font-medium text-gray-800">{d.produto.nome}</td>
-                            <td className="px-5 py-3 text-right text-gray-600">{d.saldoSistema}</td>
-                            <td className="px-5 py-3 text-right text-gray-600">{d.contado}</td>
-                            <td className="px-5 py-3 text-right">
-                              <span className={`font-bold ${d.divergencia > 0 ? 'text-blue-600' : 'text-red-500'}`}>
-                                {d.divergencia > 0 ? '+' : ''}{d.divergencia}
-                              </span>
-                            </td>
-                            <td className="px-5 py-3 text-right">
-                              {d.confirmado ? (
-                                <span className="text-xs text-green-600 font-medium flex items-center gap-1 justify-end">
-                                  <CheckCircle size={14} /> Ajustado
-                                </span>
-                              ) : (
-                                <button
-                                  onClick={() => handleConfirmarAjuste(d.idx)}
-                                  disabled={d.confirmando}
-                                  className="text-xs bg-gray-800 text-white px-3 py-1.5 rounded-lg hover:bg-gray-700 disabled:opacity-50 transition-colors"
-                                >
-                                  {d.confirmando ? 'Salvando...' : 'Confirmar ajuste'}
-                                </button>
+                      {saldosLojinha.map(({ produto, saldoSistema }) => {
+                        const status = lojinhaStatus[produto.id] ?? 'idle'
+                        const registrando = lojinhaRegistrando[produto.id] ?? false
+                        return (
+                          <tr key={produto.id} className="border-t hover:bg-gray-50">
+                            <td className="px-5 py-3 font-medium text-gray-800">{produto.nome}</td>
+                            <td className="px-5 py-3 text-right text-gray-600">{saldoSistema} unid.</td>
+                            <td className="px-5 py-3">
+                              {status === 'idle' && (
+                                <div className="flex items-center justify-center gap-2">
+                                  <button onClick={() => setLojinhaStatus((prev) => ({ ...prev, [produto.id]: 'ok' }))}
+                                    className="flex items-center gap-1 bg-green-50 text-green-700 border border-green-200 hover:bg-green-100 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors">
+                                    <Check size={13} /> OK
+                                  </button>
+                                  <button onClick={() => setLojinhaStatus((prev) => ({ ...prev, [produto.id]: 'divergencia' }))}
+                                    className="flex items-center gap-1 bg-red-50 text-red-600 border border-red-200 hover:bg-red-100 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors">
+                                    <X size={13} /> Divergência
+                                  </button>
+                                </div>
+                              )}
+                              {status === 'ok' && (
+                                <div className="flex items-center justify-center gap-2">
+                                  <span className="text-xs text-green-600 font-semibold flex items-center gap-1"><CheckCircle size={14} /> Conferido</span>
+                                  <button onClick={() => setLojinhaStatus((prev) => ({ ...prev, [produto.id]: 'idle' }))} className="text-xs text-gray-400 hover:text-gray-600 underline">desfazer</button>
+                                </div>
+                              )}
+                              {status === 'divergencia' && (
+                                <div className="flex items-center justify-center gap-2 flex-wrap">
+                                  <div className="flex items-center gap-1.5">
+                                    <span className="text-xs text-gray-500 whitespace-nowrap">Divergência:</span>
+                                    <input type="number" value={lojinhaDivInput[produto.id] ?? ''} onChange={(e) => setLojinhaDivInput((prev) => ({ ...prev, [produto.id]: e.target.value }))}
+                                      placeholder="ex: -3"
+                                      className="w-20 border border-gray-300 rounded-lg px-2 py-1 text-sm text-center focus:outline-none focus:ring-2 focus:ring-[#009ada]/30 focus:border-[#009ada]" />
+                                  </div>
+                                  <button onClick={() => handleLojinhaRegistrar(produto.id, saldoSistema)} disabled={registrando || !lojinhaDivInput[produto.id]}
+                                    className="text-xs bg-gray-800 text-white px-3 py-1.5 rounded-lg hover:bg-gray-700 disabled:opacity-50 transition-colors">
+                                    {registrando ? 'Salvando...' : 'Registrar'}
+                                  </button>
+                                  <button onClick={() => setLojinhaStatus((prev) => ({ ...prev, [produto.id]: 'idle' }))} className="text-xs text-gray-400 hover:text-gray-600 underline">cancelar</button>
+                                </div>
+                              )}
+                              {status === 'registrado' && (
+                                <div className="flex items-center justify-center">
+                                  <span className="text-xs bg-blue-50 text-blue-700 px-3 py-1 rounded-full border border-blue-100 font-semibold flex items-center gap-1">
+                                    <CheckCircle size={12} /> Ajuste registrado
+                                  </span>
+                                </div>
                               )}
                             </td>
                           </tr>
-                        ))}
+                        )
+                      })}
                     </tbody>
                   </table>
                 </div>
-              </div>
-            )}
-
-            {semDivergencia.length > 0 && (
-              <div className="bg-white rounded-2xl shadow-sm overflow-hidden">
-                <div className="p-5 border-b flex items-center gap-2">
-                  <CheckCircle className="text-green-500" size={18} />
-                  <h2 className="font-semibold text-gray-700">Produtos sem divergência ({semDivergencia.length})</h2>
-                </div>
-                <div className="px-5 py-3 flex flex-wrap gap-2">
-                  {semDivergencia.map((d) => (
-                    <span key={d.produto.id} className="text-xs bg-green-50 text-green-700 px-3 py-1 rounded-full border border-green-100">
-                      {d.produto.nome}
-                    </span>
-                  ))}
-                </div>
-              </div>
-            )}
+              )}
+            </div>
           </>
         )}
 
-        {/* Histórico de contagens */}
+        {/* Histórico */}
         <div className="bg-white rounded-2xl shadow-sm overflow-hidden">
-          <button
-            onClick={() => setHistoricoAberto((v) => !v)}
-            className="w-full flex items-center justify-between p-5 text-left hover:bg-gray-50 transition-colors"
-          >
+          <button onClick={() => setHistoricoAberto((v) => !v)}
+            className="w-full flex items-center justify-between p-5 text-left hover:bg-gray-50 transition-colors">
             <h2 className="font-semibold text-gray-700">Histórico de contagens anteriores</h2>
             {historicoAberto ? <ChevronUp size={18} className="text-gray-400" /> : <ChevronDown size={18} className="text-gray-400" />}
           </button>
@@ -395,7 +447,7 @@ export default function ConferenciaEstoquePage() {
                       <th className="text-right px-5 py-3 text-gray-500 font-medium">Sistema</th>
                       <th className="text-right px-5 py-3 text-gray-500 font-medium">Contado</th>
                       <th className="text-right px-5 py-3 text-gray-500 font-medium">Divergência</th>
-                      <th className="text-center px-5 py-3 text-gray-500 font-medium">Ajustado</th>
+                      <th className="px-5 py-3"></th>
                     </tr>
                   </thead>
                   <tbody>
@@ -405,9 +457,7 @@ export default function ConferenciaEstoquePage() {
                         <td className="px-5 py-3 font-medium text-gray-800">{c.produto?.nome ?? '-'}</td>
                         <td className="px-5 py-3">
                           {c.contexto ? (
-                            <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
-                              c.contexto === 'estoque' ? 'bg-orange-50 text-orange-700' : 'bg-purple-50 text-purple-700'
-                            }`}>
+                            <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${c.contexto === 'estoque' ? 'bg-orange-50 text-orange-700' : 'bg-purple-50 text-purple-700'}`}>
                               {c.contexto === 'estoque' ? 'Estoque' : 'Lojinha'}
                             </span>
                           ) : '-'}
@@ -419,11 +469,11 @@ export default function ConferenciaEstoquePage() {
                             {c.divergencia > 0 ? '+' : ''}{c.divergencia}
                           </span>
                         </td>
-                        <td className="px-5 py-3 text-center">
-                          {c.ajuste_confirmado
-                            ? <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full">Sim</span>
-                            : <span className="text-xs bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full">Não</span>
-                          }
+                        <td className="px-5 py-3 text-right">
+                          <button onClick={() => handleDeleteHistorico(c)} disabled={excluindoHistorico === c.id}
+                            className="text-red-400 hover:text-red-600 disabled:opacity-40 transition-colors">
+                            <Trash2 size={14} />
+                          </button>
                         </td>
                       </tr>
                     ))}

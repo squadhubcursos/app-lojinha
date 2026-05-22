@@ -1,4 +1,4 @@
-'use client'
+﻿'use client'
 
 import { useEffect, useState, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
@@ -17,6 +17,7 @@ export default function LojaPage() {
   const [usuarioId, setUsuarioId] = useState('')
   const [produtos, setProdutos] = useState<Produto[]>([])
   const [preferidos, setPreferidos] = useState<Set<string>>(new Set())
+  const [saldoLojinha, setSaldoLojinha] = useState<Record<string, number>>({})
   const [carrinho, setCarrinho] = useState<ItemCarrinho[]>([])
   const [categoriaAtiva, setCategoriaAtiva] = useState('todos')
   const [carrinhoAberto, setCarrinhoAberto] = useState(false)
@@ -30,10 +31,24 @@ export default function LojaPage() {
 
     async function fetchProdutos() {
       const supabase = createClient()
-      const [{ data }, { data: comprasData }] = await Promise.all([
+      const [{ data }, { data: comprasData }, { data: movs }] = await Promise.all([
         supabase.from('produtos').select('*').eq('ativo', true).neq('categoria', 'marmita'),
         supabase.from('compras').select('produto_id').eq('usuario_id', uid),
+        supabase.from('estoque_movimentacoes').select('produto_id, tipo, quantidade, observacao'),
       ])
+
+      // Saldo lojinha por produto
+      const lojinhaMap: Record<string, number> = {}
+      ;(movs ?? []).forEach((m) => {
+        if (m.tipo === 'entrada_lojinha') {
+          lojinhaMap[m.produto_id] = (lojinhaMap[m.produto_id] ?? 0) + m.quantidade
+        } else if (m.tipo === 'saida_lojinha') {
+          lojinhaMap[m.produto_id] = (lojinhaMap[m.produto_id] ?? 0) - m.quantidade
+        } else if (m.tipo === 'ajuste_inventario' && m.observacao?.includes('[lojinha]')) {
+          lojinhaMap[m.produto_id] = (lojinhaMap[m.produto_id] ?? 0) + m.quantidade
+        }
+      })
+      setSaldoLojinha(lojinhaMap)
 
       const counts: Record<string, number> = {}
       for (const c of comprasData ?? []) {
@@ -165,6 +180,7 @@ export default function LojaPage() {
                 onAdd={() => handleAdd(produto)}
                 onRemove={() => handleRemove(produto.id)}
                 preferido={preferidos.has(produto.id)}
+                esgotado={(saldoLojinha[produto.id] ?? 0) <= 0}
               />
             ))}
           </div>
