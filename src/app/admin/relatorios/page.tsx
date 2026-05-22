@@ -9,17 +9,15 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Label } from '@/components/ui/label'
 import TabelaRelatorio from '@/components/relatorios/TabelaRelatorio'
 import toast from 'react-hot-toast'
-import { startOfWeek, endOfWeek, startOfMonth, endOfMonth, subMonths, format } from 'date-fns'
-import { ptBR } from 'date-fns/locale'
+import { format } from 'date-fns'
 import { Download, FileText } from 'lucide-react'
 
 export default function RelatoriosPage() {
   const router = useRouter()
   const [usuarios, setUsuarios] = useState<Usuario[]>([])
   const [usuarioId, setUsuarioId] = useState('')
-  const [tipoPeriodo, setTipoPeriodo] = useState<'semanal' | 'mensal'>('semanal')
-  const [semanaOffset, setSemanaOffset] = useState(0)
-  const [mesOffset, setMesOffset] = useState(0)
+  const [dataInicio, setDataInicio] = useState(() => format(new Date(), 'yyyy-MM-dd'))
+  const [dataFim, setDataFim] = useState(() => format(new Date(), 'yyyy-MM-dd'))
   const [compras, setCompras] = useState<Compra[]>([])
   const [previewAtivo, setPreviewAtivo] = useState(false)
   const [gerandoPdf, setGerandoPdf] = useState(false)
@@ -32,23 +30,16 @@ export default function RelatoriosPage() {
   }, [router])
 
   function getRange() {
-    const now = new Date()
-    if (tipoPeriodo === 'semanal') {
-      const ref = new Date(now)
-      ref.setDate(ref.getDate() + semanaOffset * 7)
-      return { inicio: startOfWeek(ref, { weekStartsOn: 6 }), fim: endOfWeek(ref, { weekStartsOn: 6 }) }
-    } else {
-      const ref = subMonths(now, -mesOffset)
-      return { inicio: startOfMonth(ref), fim: endOfMonth(ref) }
-    }
+    const inicio = new Date(dataInicio + 'T00:00:00')
+    const fim = new Date(dataFim + 'T23:59:59')
+    return { inicio, fim }
   }
 
   function labelPeriodo() {
-    const { inicio, fim } = getRange()
-    if (tipoPeriodo === 'semanal') {
-      return `Semana de ${format(inicio, "dd/MM", { locale: ptBR })} a ${format(fim, "dd/MM/yyyy", { locale: ptBR })}`
-    }
-    return format(inicio, "MMMM 'de' yyyy", { locale: ptBR })
+    if (!dataInicio || !dataFim) return ''
+    const inicio = new Date(dataInicio + 'T00:00:00')
+    const fim = new Date(dataFim + 'T23:59:59')
+    return `${format(inicio, 'dd/MM/yyyy')} a ${format(fim, 'dd/MM/yyyy')}`
   }
 
   async function fetchCompras() {
@@ -73,6 +64,8 @@ export default function RelatoriosPage() {
 
   async function handleGerarPreview() {
     if (!usuarioId) { toast.error('Selecione um usuario.'); return }
+    if (!dataInicio || !dataFim) { toast.error('Selecione o intervalo de datas.'); return }
+    if (dataInicio > dataFim) { toast.error('A data inicial deve ser anterior à data final.'); return }
     await fetchCompras()
   }
 
@@ -113,7 +106,7 @@ export default function RelatoriosPage() {
     if (!usuarioId || !previewAtivo) return
     setGerandoPdf(true)
     const { inicio, fim } = getRange()
-    const periodoLabel = `${format(inicio, 'dd/MM/yyyy')} a ${format(fim, 'dd/MM/yyyy')}`
+    const periodoLabel = labelPeriodo()
 
     try {
       const res = await fetch('/api/pdf/relatorio', {
@@ -129,7 +122,7 @@ export default function RelatoriosPage() {
       const a = document.createElement('a')
       const usuario = usuarios.find((u) => u.id === usuarioId)
       a.href = url
-      a.download = `relatorio-${usuario?.nome?.replace(/\s+/g, '-').toLowerCase()}-${format(inicio, 'yyyy-MM-dd')}.pdf`
+      a.download = `relatorio-${usuario?.nome?.replace(/\s+/g, '-').toLowerCase()}-${dataInicio}.pdf`
       a.click()
       URL.revokeObjectURL(url)
     } catch (err) {
@@ -145,42 +138,36 @@ export default function RelatoriosPage() {
   return (
     <AdminLayout>
       <div className="space-y-6">
-        <h1 className="text-2xl font-bold text-gray-800">Relatorios</h1>
+        <h1 className="text-2xl font-bold text-gray-800">Relatórios</h1>
 
         <div className="bg-white rounded-2xl p-5 shadow-sm space-y-4">
-          <div className="grid sm:grid-cols-2 gap-4">
+          <div className="grid sm:grid-cols-3 gap-4">
             <div>
-              <Label>Usuario</Label>
+              <Label>Usuário</Label>
               <Select value={usuarioId} onValueChange={(v) => setUsuarioId(v ?? '')}>
                 <SelectTrigger className="mt-1"><SelectValue placeholder="Selecione o usuario" /></SelectTrigger>
                 <SelectContent>{usuarios.map((u) => (<SelectItem key={u.id} value={u.id}>{u.nome}</SelectItem>))}</SelectContent>
               </Select>
             </div>
             <div>
-              <Label>Periodo</Label>
-              <Select value={tipoPeriodo} onValueChange={(v) => setTipoPeriodo(v as 'semanal' | 'mensal')}>
-                <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="semanal">Semanal</SelectItem>
-                  <SelectItem value="mensal">Mensal</SelectItem>
-                </SelectContent>
-              </Select>
+              <Label>Data início</Label>
+              <input
+                type="date"
+                value={dataInicio}
+                onChange={(e) => setDataInicio(e.target.value)}
+                className="mt-1 w-full border border-input rounded-md px-3 py-2 text-sm bg-background focus:outline-none focus:ring-2 focus:ring-ring"
+              />
+            </div>
+            <div>
+              <Label>Data fim</Label>
+              <input
+                type="date"
+                value={dataFim}
+                onChange={(e) => setDataFim(e.target.value)}
+                className="mt-1 w-full border border-input rounded-md px-3 py-2 text-sm bg-background focus:outline-none focus:ring-2 focus:ring-ring"
+              />
             </div>
           </div>
-
-          {tipoPeriodo === 'semanal' ? (
-            <div className="flex items-center gap-3">
-              <button onClick={() => setSemanaOffset((o) => o - 1)} className="px-3 py-1.5 border rounded-lg text-sm hover:bg-gray-50">←</button>
-              <span className="text-sm font-medium text-gray-700 flex-1 text-center">{labelPeriodo()}</span>
-              <button onClick={() => setSemanaOffset((o) => o + 1)} className="px-3 py-1.5 border rounded-lg text-sm hover:bg-gray-50">→</button>
-            </div>
-          ) : (
-            <div className="flex items-center gap-3">
-              <button onClick={() => setMesOffset((o) => o - 1)} className="px-3 py-1.5 border rounded-lg text-sm hover:bg-gray-50">←</button>
-              <span className="text-sm font-medium text-gray-700 flex-1 text-center capitalize">{labelPeriodo()}</span>
-              <button onClick={() => setMesOffset((o) => o + 1)} className="px-3 py-1.5 border rounded-lg text-sm hover:bg-gray-50">→</button>
-            </div>
-          )}
 
           <button
             onClick={handleGerarPreview}
@@ -188,7 +175,7 @@ export default function RelatoriosPage() {
             className="flex items-center gap-2 bg-[#009ada] text-white rounded-lg px-5 py-2.5 text-sm font-semibold hover:bg-[#007bb5] disabled:opacity-50"
           >
             <FileText size={16} />
-            {carregando ? 'Carregando...' : 'Gerar previa'}
+            {carregando ? 'Carregando...' : 'Gerar prévia'}
           </button>
         </div>
 
@@ -210,7 +197,7 @@ export default function RelatoriosPage() {
             </div>
             <div className="p-5">
               {compras.length === 0 ? (
-                <p className="text-gray-400 text-sm text-center py-8">Nenhuma compra neste periodo.</p>
+                <p className="text-gray-400 text-sm text-center py-8">Nenhuma compra neste período.</p>
               ) : (
                 <TabelaRelatorio
                   compras={compras}

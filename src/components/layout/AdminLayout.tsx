@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useRouter, usePathname } from 'next/navigation'
 import Link from 'next/link'
-import { ShoppingBag, LayoutDashboard, Package, Users, FileText, Warehouse, LogOut, Menu, X, ClipboardList } from 'lucide-react'
+import { ShoppingBag, LayoutDashboard, Package, Users, FileText, Warehouse, LogOut, Menu, X, ClipboardList, UtensilsCrossed } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 interface Props {
@@ -16,6 +16,7 @@ const navItems = [
   { href: '/admin/conferencia-estoque', label: 'Conferência', icon: ClipboardList },
   { href: '/admin/produtos', label: 'Produtos', icon: Package },
   { href: '/admin/usuarios', label: 'Usuários', icon: Users },
+  { href: '/admin/marmitas', label: 'Marmitas', icon: UtensilsCrossed },
   { href: '/admin/relatorios', label: 'Relatórios', icon: FileText },
 ]
 
@@ -38,7 +39,6 @@ export default function AdminLayout({ children }: Props) {
 
   return (
     <div className="min-h-screen bg-gray-100 flex">
-      {/* Mobile overlay */}
       {sidebarOpen && (
         <div
           className="fixed inset-0 bg-black/50 z-40 lg:hidden"
@@ -46,7 +46,6 @@ export default function AdminLayout({ children }: Props) {
         />
       )}
 
-      {/* Sidebar */}
       <aside
         className={cn(
           'fixed top-0 left-0 h-full w-64 bg-white shadow-lg z-50 flex flex-col transition-transform duration-300',
@@ -105,9 +104,7 @@ export default function AdminLayout({ children }: Props) {
         </div>
       </aside>
 
-      {/* Main content */}
       <div className="flex-1 flex flex-col min-w-0">
-        {/* Mobile header */}
         <header className="bg-white shadow-sm py-3 px-4 flex items-center gap-3 lg:hidden">
           <button onClick={() => setSidebarOpen(true)}>
             <Menu size={22} />

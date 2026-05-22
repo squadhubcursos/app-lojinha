@@ -31,7 +31,7 @@ export default function LojaPage() {
     async function fetchProdutos() {
       const supabase = createClient()
       const [{ data }, { data: comprasData }] = await Promise.all([
-        supabase.from('produtos').select('*').eq('ativo', true),
+        supabase.from('produtos').select('*').eq('ativo', true).neq('categoria', 'marmita'),
         supabase.from('compras').select('produto_id').eq('usuario_id', uid),
       ])
 
@@ -47,7 +47,6 @@ export default function LojaPage() {
         return a.nome.localeCompare(b.nome)
       })
 
-      // Top 3 threshold: find the 3rd highest count (with tie support)
       const uniqueCounts = [...new Set(Object.values(counts))].sort((a, b) => b - a)
       const threshold = uniqueCounts[2] ?? uniqueCounts[uniqueCounts.length - 1]
       const prefSet = new Set<string>()
