@@ -45,6 +45,7 @@ export default function UsuariosPage() {
     setExcluindo(true)
     const supabase = createClient()
 
+    // Remover compras do usuário
     const { error: comprasError } = await supabase
       .from('compras')
       .delete()
@@ -55,6 +56,18 @@ export default function UsuariosPage() {
       setExcluindo(false)
       return
     }
+
+    // Nullify usuario_id em movimentações (FK constraint) em vez de deletar o histórico
+    await supabase
+      .from('estoque_movimentacoes')
+      .update({ usuario_id: null })
+      .eq('usuario_id', confirmandoExclusao.id)
+
+    // Nullify admin_id em contagens de inventário, se existir referência
+    await supabase
+      .from('inventario_contagens')
+      .update({ admin_id: null })
+      .eq('admin_id', confirmandoExclusao.id)
 
     const { error } = await supabase.from('usuarios').delete().eq('id', confirmandoExclusao.id)
     if (error) {

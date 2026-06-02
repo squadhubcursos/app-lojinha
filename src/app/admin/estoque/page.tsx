@@ -104,18 +104,49 @@ export default function EstoquePage() {
     setSalvandoEntrada(false)
   }
 
+  // Quantidade mínima no estoque antes de alertar a ADM via Slack
+  const ESTOQUE_BAIXO_THRESHOLD = 5
+
   async function handleMovLojinha() {
     if (!lojinhaProduto || !lojinhaQtd) return
     setSalvandoLojinha(true)
     const supabase = createClient()
     const qtd = parseInt(lojinhaQtd)
     const obs = lojinhaObs || 'Transferencia estoque - lojinha'
+
+    const saldoAntes = saldoEstoqueMap[lojinhaProduto] ?? 0
+    const saldoApos = saldoAntes - qtd
+
     const { error } = await supabase.from('estoque_movimentacoes').insert([
       { produto_id: lojinhaProduto, tipo: 'saida_estoque', quantidade: qtd, custo_unit: null, observacao: obs },
       { produto_id: lojinhaProduto, tipo: 'entrada_lojinha', quantidade: qtd, custo_unit: null, observacao: obs },
     ])
     if (error) { toast.error('Erro ao registrar movimentacao.') }
-    else { toast.success('Movimentacao registrada!'); setLojinhaProduto(''); setLojinhaQtd(''); setLojinhaObs(''); fetchData() }
+    else {
+      toast.success('Movimentacao registrada!')
+
+      // Notificar ADM via Slack se estoque ficou abaixo do limiar
+      if (saldoApos <= ESTOQUE_BAIXO_THRESHOLD && saldoAntes > ESTOQUE_BAIXO_THRESHOLD) {
+        const produto = produtos.find((p) => p.id === lojinhaProduto)
+        if (produto) {
+          fetch('/api/slack/notify', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              type: 'estoque_baixo',
+              productName: produto.nome,
+              productImage: produto.imagem_url ?? null,
+              quantity: saldoApos,
+            }),
+          }).catch(console.error)
+        }
+      }
+
+      setLojinhaProduto('')
+      setLojinhaQtd('')
+      setLojinhaObs('')
+      fetchData()
+    }
     setSalvandoLojinha(false)
   }
 

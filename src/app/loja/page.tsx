@@ -137,6 +137,23 @@ export default function LojaPage() {
       const { error: movError } = await supabase.from('estoque_movimentacoes').insert(movimentacoes)
       if (movError) throw movError
 
+      // Notificar ADM via Slack se algum produto zerou na lojinha
+      for (const item of carrinho) {
+        const saldoAtual = saldoLojinha[item.produto.id] ?? 0
+        const saldoApos = saldoAtual - item.quantidade
+        if (saldoApos <= 0 && saldoAtual > 0) {
+          fetch('/api/slack/notify', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              type: 'produto_esgotado',
+              productName: item.produto.nome,
+              productImage: item.produto.imagem_url ?? null,
+            }),
+          }).catch(console.error)
+        }
+      }
+
       localStorage.setItem('ultimo_pedido', JSON.stringify(carrinho))
       localStorage.setItem('ultimo_pedido_horario', agora)
       setCarrinho([])
