@@ -29,14 +29,12 @@ function formatCurrencyPDF(value: number): string {
 
 function formatDatePDF(date: string): string {
   const d = new Date(date)
-  return d.toLocaleDateString('pt-BR')
+  return d.toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' })
 }
 
 function formatTimePDF(date: string): string {
   const d = new Date(date)
-  const h = String(d.getHours()).padStart(2, '0')
-  const m = String(d.getMinutes()).padStart(2, '0')
-  return `${h}:${m}`
+  return d.toLocaleTimeString('pt-BR', { timeZone: 'America/Sao_Paulo', hour: '2-digit', minute: '2-digit' })
 }
 
 interface CompraItem {
@@ -77,7 +75,7 @@ export async function POST(req: NextRequest) {
           <Text style={styles.title}>SquadHub — Relatorio de Compras Lojinha</Text>
           <Text style={styles.subtitle}>Colaborador: {usuario?.nome ?? 'N/A'}</Text>
           <Text style={styles.subtitle}>Periodo: {periodoLabel}</Text>
-          <Text style={styles.subtitle}>Gerado em: {formatDatePDF(new Date().toISOString())}</Text>
+          <Text style={styles.subtitle}>Gerado em: {new Date().toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' })}</Text>
         </View>
 
         <View style={styles.table}>
