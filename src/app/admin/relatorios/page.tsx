@@ -18,6 +18,8 @@ export default function RelatoriosPage() {
   const [usuarioId, setUsuarioId] = useState('')
   const [dataInicio, setDataInicio] = useState(() => format(new Date(), 'yyyy-MM-dd'))
   const [dataFim, setDataFim] = useState(() => format(new Date(), 'yyyy-MM-dd'))
+  const [horaInicio, setHoraInicio] = useState('00:00')
+  const [horaFim, setHoraFim] = useState('23:59')
   const [compras, setCompras] = useState<Compra[]>([])
   const [previewAtivo, setPreviewAtivo] = useState(false)
   const [gerandoPdf, setGerandoPdf] = useState(false)
@@ -30,16 +32,16 @@ export default function RelatoriosPage() {
   }, [router])
 
   function getRange() {
-    const inicio = new Date(dataInicio + 'T00:00:00')
-    const fim = new Date(dataFim + 'T23:59:59')
+    const inicio = new Date(`${dataInicio}T${horaInicio}:00`)
+    const fim = new Date(`${dataFim}T${horaFim}:59`)
     return { inicio, fim }
   }
 
   function labelPeriodo() {
     if (!dataInicio || !dataFim) return ''
-    const inicio = new Date(dataInicio + 'T00:00:00')
-    const fim = new Date(dataFim + 'T23:59:59')
-    return `${format(inicio, 'dd/MM/yyyy')} a ${format(fim, 'dd/MM/yyyy')}`
+    const inicio = new Date(`${dataInicio}T${horaInicio}:00`)
+    const fim = new Date(`${dataFim}T${horaFim}:59`)
+    return `${format(inicio, 'dd/MM/yyyy HH:mm')} a ${format(fim, 'dd/MM/yyyy HH:mm')}`
   }
 
   async function fetchCompras() {
@@ -65,7 +67,7 @@ export default function RelatoriosPage() {
   async function handleGerarPreview() {
     if (!usuarioId) { toast.error('Selecione um usuario.'); return }
     if (!dataInicio || !dataFim) { toast.error('Selecione o intervalo de datas.'); return }
-    if (dataInicio > dataFim) { toast.error('A data inicial deve ser anterior à data final.'); return }
+    if (new Date(`${dataInicio}T${horaInicio}:00`) > new Date(`${dataFim}T${horaFim}:59`)) { toast.error('O intervalo de datas/horas é inválido.'); return }
     await fetchCompras()
   }
 
@@ -141,8 +143,8 @@ export default function RelatoriosPage() {
         <h1 className="text-2xl font-bold text-gray-800">Relatórios</h1>
 
         <div className="bg-white rounded-2xl p-5 shadow-sm space-y-4">
-          <div className="grid sm:grid-cols-3 gap-4">
-            <div>
+          <div className="grid sm:grid-cols-2 lg:grid-cols-5 gap-4">
+            <div className="sm:col-span-2 lg:col-span-1">
               <Label>Usuário</Label>
               <Select value={usuarioId} onValueChange={(v) => setUsuarioId(v ?? '')}>
                 <SelectTrigger className="mt-1"><SelectValue placeholder="Selecione o usuario" /></SelectTrigger>
@@ -159,11 +161,29 @@ export default function RelatoriosPage() {
               />
             </div>
             <div>
+              <Label>Hora início</Label>
+              <input
+                type="time"
+                value={horaInicio}
+                onChange={(e) => setHoraInicio(e.target.value)}
+                className="mt-1 w-full border border-input rounded-md px-3 py-2 text-sm bg-background focus:outline-none focus:ring-2 focus:ring-ring"
+              />
+            </div>
+            <div>
               <Label>Data fim</Label>
               <input
                 type="date"
                 value={dataFim}
                 onChange={(e) => setDataFim(e.target.value)}
+                className="mt-1 w-full border border-input rounded-md px-3 py-2 text-sm bg-background focus:outline-none focus:ring-2 focus:ring-ring"
+              />
+            </div>
+            <div>
+              <Label>Hora fim</Label>
+              <input
+                type="time"
+                value={horaFim}
+                onChange={(e) => setHoraFim(e.target.value)}
                 className="mt-1 w-full border border-input rounded-md px-3 py-2 text-sm bg-background focus:outline-none focus:ring-2 focus:ring-ring"
               />
             </div>
