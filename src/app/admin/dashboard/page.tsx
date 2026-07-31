@@ -7,6 +7,7 @@ import AdminLayout from '@/components/layout/AdminLayout'
 import FiltroPeriodo, { PresetPeriodo, periodoDoPreset, rotuloPeriodo } from '@/components/admin/FiltroPeriodo'
 import { formatCurrency } from '@/lib/utils'
 import { calcularMetricas } from '@/lib/metricas'
+import { buscarTodos } from '@/lib/paginar'
 import { Compra, EstoqueMovimentacao, Produto, Usuario, InventarioContagem } from '@/lib/types'
 import { format } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
@@ -76,24 +77,32 @@ export default function DashboardPage() {
     const inicio = periodo.inicio.toISOString()
     const fim = periodo.fim.toISOString()
 
-    const [{ data: comprasData }, { data: contagensData }] = await Promise.all([
-      supabase
-        .from('compras')
-        .select('*, produto:produtos(*), usuario:usuarios(*)')
-        .gte('comprado_em', inicio)
-        .lte('comprado_em', fim)
-        .order('comprado_em', { ascending: false }),
-      supabase
-        .from('inventario_contagens')
-        .select('*')
-        .eq('contexto', 'lojinha')
-        .lt('divergencia', 0)
-        .gte('contado_em', inicio)
-        .lte('contado_em', fim),
+    // Um periodo longo passa das 1000 linhas que o PostgREST devolve por resposta
+    const [comprasData, contagensData] = await Promise.all([
+      buscarTodos<CompraComDetalhes>((de, ate) =>
+        supabase
+          .from('compras')
+          .select('*, produto:produtos(*), usuario:usuarios(*)')
+          .gte('comprado_em', inicio)
+          .lte('comprado_em', fim)
+          .order('comprado_em', { ascending: false })
+          .range(de, ate)
+      ),
+      buscarTodos<InventarioContagem>((de, ate) =>
+        supabase
+          .from('inventario_contagens')
+          .select('*')
+          .eq('contexto', 'lojinha')
+          .lt('divergencia', 0)
+          .gte('contado_em', inicio)
+          .lte('contado_em', fim)
+          .order('contado_em', { ascending: false })
+          .range(de, ate)
+      ),
     ])
 
-    setCompras((comprasData ?? []) as CompraComDetalhes[])
-    setContagens((contagensData ?? []) as InventarioContagem[])
+    setCompras(comprasData)
+    setContagens(contagensData)
     setLoading(false)
   }, [periodo])
 

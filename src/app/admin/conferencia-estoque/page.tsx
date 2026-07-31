@@ -6,7 +6,7 @@ import { createClient } from '@/lib/supabase/client'
 import AdminLayout from '@/components/layout/AdminLayout'
 import ConferenciaTab, { SaldoInfo } from '@/components/admin/ConferenciaTab'
 import { InventarioContagem } from '@/lib/types'
-import { calcularSaldos, SELECT_SALDO, ContextoSaldo } from '@/lib/saldos'
+import { mapearSaldos, VIEW_SALDOS, SaldoProduto, ContextoSaldo } from '@/lib/saldos'
 import { formatDate } from '@/lib/utils'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { ChevronDown, ChevronUp, X, Trash2, Pencil, Save } from 'lucide-react'
@@ -31,12 +31,12 @@ export default function ConferenciaEstoquePage() {
 
   const fetchSaldos = useCallback(async () => {
     const supabase = createClient()
-    const [{ data: produtos }, { data: movs }] = await Promise.all([
+    const [{ data: produtos }, { data: linhas }] = await Promise.all([
       supabase.from('produtos').select('*').eq('ativo', true).order('nome'),
-      supabase.from('estoque_movimentacoes').select(SELECT_SALDO),
+      supabase.from(VIEW_SALDOS).select('*'),
     ])
 
-    const { estoque, lojinha } = calcularSaldos(movs ?? [])
+    const { estoque, lojinha } = mapearSaldos((linhas ?? []) as SaldoProduto[])
     const prods = produtos ?? []
     setSaldosEstoque(prods.map((p) => ({ produto: p, saldoSistema: estoque[p.id] ?? 0 })))
     setSaldosLojinha(prods.map((p) => ({ produto: p, saldoSistema: lojinha[p.id] ?? 0 })))

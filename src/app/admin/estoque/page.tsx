@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import AdminLayout from '@/components/layout/AdminLayout'
 import { Produto, EstoqueMovimentacao } from '@/lib/types'
-import { calcularSaldos } from '@/lib/saldos'
+import { mapearSaldos, VIEW_SALDOS, SaldoProduto, Saldos } from '@/lib/saldos'
 import { formatCurrency, formatDate, formatTime } from '@/lib/utils'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Input } from '@/components/ui/input'
@@ -19,6 +19,7 @@ export default function EstoquePage() {
   const [produtos, setProdutos] = useState<Produto[]>([])
   const [usuarios, setUsuarios] = useState<{ id: string; nome: string }[]>([])
   const [movimentacoes, setMovimentacoes] = useState<EstoqueMovimentacao[]>([])
+  const [saldos, setSaldos] = useState<Saldos>({ estoque: {}, lojinha: {} })
   const [loading, setLoading] = useState(true)
 
   const [entradaProduto, setEntradaProduto] = useState('')
@@ -56,20 +57,30 @@ export default function EstoquePage() {
     fetchData()
   }, [router])
 
+  // Quantas movimentacoes recentes o historico carrega. O saldo nao depende disto:
+  // ele vem somado do banco pela view, entao nao sofre com o corte.
+  const LIMITE_HISTORICO = 500
+
   async function fetchData() {
     const supabase = createClient()
-    const [{ data: prods }, { data: movs }, { data: users }] = await Promise.all([
+    const [{ data: prods }, { data: movs }, { data: users }, { data: linhasSaldo }] = await Promise.all([
       supabase.from('produtos').select('*').eq('ativo', true).order('nome'),
-      supabase.from('estoque_movimentacoes').select('*, produto:produtos(nome), usuario:usuarios(nome)').order('registrado_em', { ascending: false }),
+      supabase
+        .from('estoque_movimentacoes')
+        .select('*, produto:produtos(nome), usuario:usuarios(nome)')
+        .order('registrado_em', { ascending: false })
+        .limit(LIMITE_HISTORICO),
       supabase.from('usuarios').select('id, nome').eq('ativo', true).order('nome'),
+      supabase.from(VIEW_SALDOS).select('*'),
     ])
     setProdutos(prods ?? [])
     setMovimentacoes((movs ?? []) as EstoqueMovimentacao[])
     setUsuarios(users ?? [])
+    setSaldos(mapearSaldos((linhasSaldo ?? []) as SaldoProduto[]))
     setLoading(false)
   }
 
-  const { estoque: saldoEstoqueMap, lojinha: saldoLojinhaMap } = calcularSaldos(movimentacoes)
+  const { estoque: saldoEstoqueMap, lojinha: saldoLojinhaMap } = saldos
 
   async function handleEntradaEstoque() {
     if (!entradaProduto || !entradaQtd) return
@@ -326,7 +337,15 @@ export default function EstoquePage() {
 
         <div className="bg-white rounded-2xl p-5 shadow-sm">
           <div className="flex items-center justify-between mb-4">
-            <h2 className="font-semibold text-gray-700">Historico de movimentacoes</h2>
+            <div>
+              <h2 className="font-semibold text-gray-700">Historico de movimentacoes</h2>
+              {movimentacoes.length >= LIMITE_HISTORICO && (
+                <p className="text-xs text-amber-600 mt-0.5">
+                  Mostrando as {LIMITE_HISTORICO} movimentacoes mais recentes. Os filtros abaixo valem
+                  sobre essas — o saldo acima considera o historico inteiro.
+                </p>
+              )}
+            </div>
             <button onClick={() => setConfirmLimparHistorico(true)} className="flex items-center gap-1.5 text-xs text-red-500 hover:text-red-600 border border-red-200 hover:border-red-300 px-3 py-1.5 rounded-lg transition-colors">
               <Trash2 size={13} />Limpar historico
             </button>

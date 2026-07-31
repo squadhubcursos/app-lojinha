@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import toast from 'react-hot-toast'
 import { createClient } from '@/lib/supabase/client'
 import { Produto, ItemCarrinho } from '@/lib/types'
-import { calcularSaldos, SELECT_SALDO } from '@/lib/saldos'
+import { mapearSaldos, VIEW_SALDOS, SaldoProduto } from '@/lib/saldos'
 import UserLayout from '@/components/layout/UserLayout'
 import ProdutoCard from '@/components/loja/ProdutoCard'
 import FiltroCategoria from '@/components/loja/FiltroCategoria'
@@ -32,13 +32,13 @@ export default function LojaPage() {
 
     async function fetchProdutos() {
       const supabase = createClient()
-      const [{ data }, { data: comprasData }, { data: movs }] = await Promise.all([
+      const [{ data }, { data: comprasData }, { data: linhas }] = await Promise.all([
         supabase.from('produtos').select('*').eq('ativo', true).neq('categoria', 'marmita'),
         supabase.from('compras').select('produto_id').eq('usuario_id', uid),
-        supabase.from('estoque_movimentacoes').select(SELECT_SALDO),
+        supabase.from(VIEW_SALDOS).select('*'),
       ])
 
-      setSaldoLojinha(calcularSaldos(movs ?? []).lojinha)
+      setSaldoLojinha(mapearSaldos((linhas ?? []) as SaldoProduto[]).lojinha)
 
       const counts: Record<string, number> = {}
       for (const c of comprasData ?? []) {
