@@ -124,3 +124,11 @@ create policy "allow_all_inventario" on inventario_contagens for all using (true
 -- Adicionar rastreamento de usuario nas movimentacoes (saida_lojinha)
 -- Execute este comando no SQL Editor do Supabase:
 -- ALTER TABLE estoque_movimentacoes ADD COLUMN IF NOT EXISTS usuario_id UUID REFERENCES usuarios(id);
+
+-- Coluna de contexto nas contagens (estoque | lojinha)
+-- ALTER TABLE inventario_contagens ADD COLUMN IF NOT EXISTS contexto TEXT;
+
+-- A partir daqui as alteracoes vivem em supabase/migrations/, na ordem numerica:
+--   01-integridade-estoque.sql — vinculos compra/contagem/transferencia e triggers
+--     de sincronia. Sem ele o app grava compra e baixa de estoque separadamente e
+--     os saldos divergem.

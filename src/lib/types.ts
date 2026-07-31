@@ -41,8 +41,29 @@ export interface EstoqueMovimentacao {
   observacao: string | null
   registrado_em: string
   usuario_id?: string | null
+  /** Venda que originou a baixa. Preenchido pela trigger sync_mov_venda. */
+  compra_id?: string | null
+  /** Contagem que originou o ajuste de inventario. */
+  contagem_id?: string | null
+  /** Une as duas pernas de uma transferencia estoque -> lojinha. */
+  grupo_id?: string | null
+  /** Onde o ajuste_inventario incide: 'estoque' ou 'lojinha'. */
+  contexto?: string | null
   produto?: Produto
   usuario?: Usuario
+}
+
+export interface InventarioContagem {
+  id: string
+  produto_id: string
+  contexto: string | null
+  quantidade_sistema: number
+  quantidade_contada: number
+  divergencia: number
+  ajuste_confirmado: boolean
+  contado_em: string
+  admin_id?: string | null
+  produto?: { nome: string }
 }
 
 export interface ItemCarrinho {

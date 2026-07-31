@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import AdminLayout from '@/components/layout/AdminLayout'
@@ -26,9 +26,14 @@ interface CompraRegistrada {
   comprado_em: string
   quantidade: number
   preco_unit: number
+  usuario_id: string
+  produto_id: string
   usuario: { nome: string } | null
   produto: { nome: string } | null
 }
+
+const CAMPOS_HISTORICO =
+  'id, comprado_em, quantidade, preco_unit, usuario_id, produto_id, usuario:usuarios(nome), produto:produtos(nome)'
 
 export default function MarmitasPage() {
   const router = useRouter()
@@ -39,6 +44,21 @@ export default function MarmitasPage() {
   const [historico, setHistorico] = useState<CompraRegistrada[]>([])
   const [loadingHistorico, setLoadingHistorico] = useState(true)
 
+  const [filtroUsuario, setFiltroUsuario] = useState('todos')
+  const [filtroProduto, setFiltroProduto] = useState('todos')
+
+  const carregarHistorico = useCallback(async (idsMarmitas: string[]) => {
+    if (idsMarmitas.length === 0) { setHistorico([]); return }
+    const supabase = createClient()
+    const { data } = await supabase
+      .from('compras')
+      .select(CAMPOS_HISTORICO)
+      .in('produto_id', idsMarmitas)
+      .order('comprado_em', { ascending: false })
+      .limit(100)
+    setHistorico((data ?? []) as unknown as CompraRegistrada[])
+  }, [])
+
   useEffect(() => {
     if (!localStorage.getItem('isAdmin')) { router.replace('/admin'); return }
     const supabase = createClient()
@@ -46,30 +66,14 @@ export default function MarmitasPage() {
     Promise.all([
       supabase.from('usuarios').select('*').eq('ativo', true).order('nome'),
       supabase.from('produtos').select('*').eq('categoria', 'marmita').eq('ativo', true).order('nome'),
-      supabase
-        .from('compras')
-        .select('id, comprado_em, quantidade, preco_unit, usuario:usuarios(nome), produto:produtos(nome)')
-        .in('produto_id', [] as string[])
-        .order('comprado_em', { ascending: false })
-        .limit(50),
     ]).then(async ([{ data: us }, { data: ms }]) => {
       setUsuarios(us ?? [])
       const marmitaList = ms ?? []
       setMarmitas(marmitaList)
-
-      if (marmitaList.length > 0) {
-        const ids = marmitaList.map((m) => m.id)
-        const { data: hist } = await supabase
-          .from('compras')
-          .select('id, comprado_em, quantidade, preco_unit, usuario:usuarios(nome), produto:produtos(nome)')
-          .in('produto_id', ids)
-          .order('comprado_em', { ascending: false })
-          .limit(100)
-        setHistorico((hist ?? []) as unknown as CompraRegistrada[])
-      }
+      await carregarHistorico(marmitaList.map((m) => m.id))
       setLoadingHistorico(false)
     })
-  }, [router])
+  }, [router, carregarHistorico])
 
   function addLinha() {
     const ultima = linhas[linhas.length - 1]
@@ -117,38 +121,14 @@ export default function MarmitasPage() {
         }
       })
 
+      // A baixa em estoque_movimentacoes e criada pela trigger sync_mov_venda.
       const { error: comprasError } = await supabase.from('compras').insert(comprasData)
       if (comprasError) throw comprasError
-
-      const movimentacoes = linhas.map((l) => {
-        const dataLocal = new Date(l.data + 'T12:00:00')
-        return {
-          produto_id: l.produtoId,
-          tipo: 'saida_lojinha' as const,
-          quantidade: parseInt(l.quantidade),
-          custo_unit: null,
-          observacao: 'Venda marmita',
-          usuario_id: l.usuarioId,
-          registrado_em: dataLocal.toISOString(),
-        }
-      })
-
-      const { error: movError } = await supabase.from('estoque_movimentacoes').insert(movimentacoes)
-      if (movError) throw movError
 
       toast.success('Compras registradas!')
       setLinhas([{ id: Date.now(), usuarioId: '', produtoId: '', quantidade: '1', data: format(new Date(), 'yyyy-MM-dd') }])
 
-      if (marmitas.length > 0) {
-        const ids = marmitas.map((m) => m.id)
-        const { data: hist } = await supabase
-          .from('compras')
-          .select('id, comprado_em, quantidade, preco_unit, usuario:usuarios(nome), produto:produtos(nome)')
-          .in('produto_id', ids)
-          .order('comprado_em', { ascending: false })
-          .limit(100)
-        setHistorico((hist ?? []) as unknown as CompraRegistrada[])
-      }
+      await carregarHistorico(marmitas.map((m) => m.id))
     } catch (err) {
       console.error(err)
       toast.error('Erro ao registrar compras.')
@@ -157,22 +137,19 @@ export default function MarmitasPage() {
     }
   }
 
+  const historicoFiltrado = historico.filter((c) => {
+    if (filtroUsuario !== 'todos' && c.usuario_id !== filtroUsuario) return false
+    if (filtroProduto !== 'todos' && c.produto_id !== filtroProduto) return false
+    return true
+  })
+  const filtrosAtivos = filtroUsuario !== 'todos' || filtroProduto !== 'todos'
+  const totalFiltrado = historicoFiltrado.reduce((acc, c) => acc + c.preco_unit * c.quantidade, 0)
+
   async function handleDelete(id: string) {
     const supabase = createClient()
-    const compra = historico.find((c) => c.id === id)
+    // A baixa vinculada sai junto pela cascata de compra_id.
     const { error } = await supabase.from('compras').delete().eq('id', id)
     if (error) { toast.error('Erro ao excluir.'); return }
-
-    if (compra) {
-      const tsInicio = new Date(new Date(compra.comprado_em).getTime() - 60000).toISOString()
-      const tsFim = new Date(new Date(compra.comprado_em).getTime() + 60000).toISOString()
-      await supabase
-        .from('estoque_movimentacoes')
-        .delete()
-        .eq('tipo', 'saida_lojinha')
-        .gte('registrado_em', tsInicio)
-        .lte('registrado_em', tsFim)
-    }
 
     toast.success('Removido.')
     setHistorico((prev) => prev.filter((c) => c.id !== id))
@@ -253,13 +230,48 @@ export default function MarmitasPage() {
         </div>
 
         <div className="bg-white rounded-2xl shadow-sm overflow-hidden">
-          <div className="p-5 border-b">
+          <div className="p-5 border-b space-y-4">
             <h2 className="font-semibold text-gray-800">Histórico recente</h2>
+
+            <div className="flex flex-wrap gap-3">
+              <div className="flex flex-col gap-1">
+                <label className="text-xs font-medium text-gray-500">Usuário</label>
+                <Select value={filtroUsuario} onValueChange={(v) => setFiltroUsuario(v ?? 'todos')}>
+                  <SelectTrigger className="h-9 w-48 text-sm"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="todos">Todos os usuários</SelectItem>
+                    {usuarios.map((u) => (<SelectItem key={u.id} value={u.id}>{u.nome}</SelectItem>))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="flex flex-col gap-1">
+                <label className="text-xs font-medium text-gray-500">Marmita</label>
+                <Select value={filtroProduto} onValueChange={(v) => setFiltroProduto(v ?? 'todos')}>
+                  <SelectTrigger className="h-9 w-48 text-sm"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="todos">Todas as marmitas</SelectItem>
+                    {marmitas.map((m) => (<SelectItem key={m.id} value={m.id}>{m.nome}</SelectItem>))}
+                  </SelectContent>
+                </Select>
+              </div>
+              {filtrosAtivos && (
+                <div className="flex flex-col gap-1 justify-end">
+                  <button
+                    onClick={() => { setFiltroUsuario('todos'); setFiltroProduto('todos') }}
+                    className="h-9 px-3 text-xs text-gray-500 hover:text-gray-700 border border-gray-200 hover:border-gray-300 rounded-md transition-colors"
+                  >
+                    Limpar filtros
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
           {loadingHistorico ? (
             <div className="p-5 space-y-2">{Array.from({ length: 5 }).map((_, i) => <div key={i} className="h-8 bg-gray-100 rounded animate-pulse" />)}</div>
-          ) : historico.length === 0 ? (
-            <p className="p-5 text-sm text-gray-400 text-center">Nenhuma compra registrada.</p>
+          ) : historicoFiltrado.length === 0 ? (
+            <p className="p-5 text-sm text-gray-400 text-center">
+              {filtrosAtivos ? 'Nenhuma compra para este filtro.' : 'Nenhuma compra registrada.'}
+            </p>
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
@@ -274,7 +286,7 @@ export default function MarmitasPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
-                  {historico.map((c) => (
+                  {historicoFiltrado.map((c) => (
                     <tr key={c.id} className="hover:bg-gray-50">
                       <td className="px-4 py-3 text-gray-600">{new Date(c.comprado_em).toLocaleDateString('pt-BR')}</td>
                       <td className="px-4 py-3 font-medium text-gray-800">{c.usuario?.nome ?? '-'}</td>
@@ -289,6 +301,15 @@ export default function MarmitasPage() {
                     </tr>
                   ))}
                 </tbody>
+                <tfoot className="bg-gray-50 border-t">
+                  <tr>
+                    <td colSpan={4} className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">
+                      Total {filtrosAtivos ? 'filtrado' : ''} ({historicoFiltrado.length} registros)
+                    </td>
+                    <td className="px-4 py-3 text-right font-bold text-gray-900">{formatCurrency(totalFiltrado)}</td>
+                    <td />
+                  </tr>
+                </tfoot>
               </table>
             </div>
           )}

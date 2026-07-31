@@ -4,7 +4,8 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import AdminLayout from '@/components/layout/AdminLayout'
-import { Produto, EstoqueMovimentacao, Usuario } from '@/lib/types'
+import { Produto, EstoqueMovimentacao } from '@/lib/types'
+import { calcularSaldos } from '@/lib/saldos'
 import { formatCurrency, formatDate, formatTime } from '@/lib/utils'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Input } from '@/components/ui/input'
@@ -68,25 +69,7 @@ export default function EstoquePage() {
     setLoading(false)
   }
 
-  const saldoEstoqueMap: Record<string, number> = {}
-  const saldoLojinhaMap: Record<string, number> = {}
-  movimentacoes.forEach((m) => {
-    if (m.tipo === 'entrada_estoque') {
-      saldoEstoqueMap[m.produto_id] = (saldoEstoqueMap[m.produto_id] ?? 0) + m.quantidade
-    } else if (m.tipo === 'saida_estoque') {
-      saldoEstoqueMap[m.produto_id] = (saldoEstoqueMap[m.produto_id] ?? 0) - m.quantidade
-    } else if (m.tipo === 'entrada_lojinha') {
-      saldoLojinhaMap[m.produto_id] = (saldoLojinhaMap[m.produto_id] ?? 0) + m.quantidade
-    } else if (m.tipo === 'saida_lojinha') {
-      saldoLojinhaMap[m.produto_id] = (saldoLojinhaMap[m.produto_id] ?? 0) - m.quantidade
-    } else if (m.tipo === 'ajuste_inventario') {
-      if (m.observacao?.includes('[lojinha]')) {
-        saldoLojinhaMap[m.produto_id] = (saldoLojinhaMap[m.produto_id] ?? 0) + m.quantidade
-      } else {
-        saldoEstoqueMap[m.produto_id] = (saldoEstoqueMap[m.produto_id] ?? 0) + m.quantidade
-      }
-    }
-  })
+  const { estoque: saldoEstoqueMap, lojinha: saldoLojinhaMap } = calcularSaldos(movimentacoes)
 
   async function handleEntradaEstoque() {
     if (!entradaProduto || !entradaQtd) return
@@ -117,10 +100,12 @@ export default function EstoquePage() {
     const saldoAntes = saldoEstoqueMap[lojinhaProduto] ?? 0
     const saldoApos = saldoAntes - qtd
 
-    const { error } = await supabase.from('estoque_movimentacoes').insert([
-      { produto_id: lojinhaProduto, tipo: 'saida_estoque', quantidade: qtd, custo_unit: null, observacao: obs },
-      { produto_id: lojinhaProduto, tipo: 'entrada_lojinha', quantidade: qtd, custo_unit: null, observacao: obs },
-    ])
+    // As duas pernas nascem na mesma transacao, unidas por grupo_id.
+    const { error } = await supabase.rpc('mover_para_lojinha', {
+      p_produto_id: lojinhaProduto,
+      p_quantidade: qtd,
+      p_observacao: obs,
+    })
     if (error) { toast.error('Erro ao registrar movimentacao.') }
     else {
       toast.success('Movimentacao registrada!')
@@ -171,6 +156,11 @@ export default function EstoquePage() {
   }
 
   function abrirEdicao(m: EstoqueMovimentacao) {
+    // Baixas de venda sao espelho da compra: editar aqui dessincronizaria as duas.
+    if (m.compra_id) {
+      toast('Esta baixa espelha uma venda. Ajuste a compra em Relatorios.', { icon: 'ℹ️' })
+      return
+    }
     setEditando(m)
     setEditProduto(m.produto_id)
     setEditTipo(m.tipo)
@@ -202,26 +192,12 @@ export default function EstoquePage() {
   async function handleExcluirMovimentacao(m: EstoqueMovimentacao) {
     const supabase = createClient()
 
-    if (m.tipo === 'saida_lojinha') {
-      const tsInicio = new Date(new Date(m.registrado_em).getTime() - 60000).toISOString()
-      const tsFim = new Date(new Date(m.registrado_em).getTime() + 60000).toISOString()
+    // Baixa de venda: apaga a compra e deixa a cascata levar a movimentacao.
+    // Perna de transferencia: a trigger sync_par_transferencia remove a irma.
+    const { error } = m.compra_id
+      ? await supabase.from('compras').delete().eq('id', m.compra_id)
+      : await supabase.from('estoque_movimentacoes').delete().eq('id', m.id)
 
-      let query = supabase
-        .from('compras')
-        .delete()
-        .eq('produto_id', m.produto_id)
-        .eq('quantidade', m.quantidade)
-        .gte('comprado_em', tsInicio)
-        .lte('comprado_em', tsFim)
-
-      if (m.usuario_id) {
-        query = query.eq('usuario_id', m.usuario_id)
-      }
-
-      await query
-    }
-
-    const { error } = await supabase.from('estoque_movimentacoes').delete().eq('id', m.id)
     if (error) { toast.error('Erro ao excluir.') }
     else { toast.success('Registro excluido!'); fetchData() }
     setConfirmExcluir(null)
@@ -528,9 +504,11 @@ export default function EstoquePage() {
         <DialogContent className="max-w-sm">
           <DialogHeader><DialogTitle>Excluir este registro?</DialogTitle></DialogHeader>
           <p className="text-sm text-gray-500 mt-1">
-            {confirmExcluir?.tipo === 'saida_lojinha'
-              ? 'Esta movimentacao de saida lojinha e a compra correspondente do usuario serao removidas permanentemente.'
-              : 'Esta acao nao pode ser desfeita.'}
+            {confirmExcluir?.compra_id
+              ? 'Esta baixa e a compra do usuario que a originou serao removidas permanentemente.'
+              : confirmExcluir?.grupo_id
+                ? 'As duas pernas desta transferencia (saida do estoque e entrada na lojinha) serao removidas.'
+                : 'Esta acao nao pode ser desfeita.'}
           </p>
           <div className="flex gap-3 mt-4">
             <button onClick={() => setConfirmExcluir(null)} className="flex-1 border border-gray-200 rounded-lg py-2.5 text-sm font-medium text-gray-600 hover:bg-gray-50">Cancelar</button>

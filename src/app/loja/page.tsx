@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import toast from 'react-hot-toast'
 import { createClient } from '@/lib/supabase/client'
 import { Produto, ItemCarrinho } from '@/lib/types'
+import { calcularSaldos, SELECT_SALDO } from '@/lib/saldos'
 import UserLayout from '@/components/layout/UserLayout'
 import ProdutoCard from '@/components/loja/ProdutoCard'
 import FiltroCategoria from '@/components/loja/FiltroCategoria'
@@ -34,21 +35,10 @@ export default function LojaPage() {
       const [{ data }, { data: comprasData }, { data: movs }] = await Promise.all([
         supabase.from('produtos').select('*').eq('ativo', true).neq('categoria', 'marmita'),
         supabase.from('compras').select('produto_id').eq('usuario_id', uid),
-        supabase.from('estoque_movimentacoes').select('produto_id, tipo, quantidade, observacao'),
+        supabase.from('estoque_movimentacoes').select(SELECT_SALDO),
       ])
 
-      // Saldo lojinha por produto
-      const lojinhaMap: Record<string, number> = {}
-      ;(movs ?? []).forEach((m) => {
-        if (m.tipo === 'entrada_lojinha') {
-          lojinhaMap[m.produto_id] = (lojinhaMap[m.produto_id] ?? 0) + m.quantidade
-        } else if (m.tipo === 'saida_lojinha') {
-          lojinhaMap[m.produto_id] = (lojinhaMap[m.produto_id] ?? 0) - m.quantidade
-        } else if (m.tipo === 'ajuste_inventario' && m.observacao?.includes('[lojinha]')) {
-          lojinhaMap[m.produto_id] = (lojinhaMap[m.produto_id] ?? 0) + m.quantidade
-        }
-      })
-      setSaldoLojinha(lojinhaMap)
+      setSaldoLojinha(calcularSaldos(movs ?? []).lojinha)
 
       const counts: Record<string, number> = {}
       for (const c of comprasData ?? []) {
@@ -121,21 +111,9 @@ export default function LojaPage() {
         comprado_em: agora,
       }))
 
+      // A baixa em estoque_movimentacoes e criada pela trigger sync_mov_venda.
       const { error: comprasError } = await supabase.from('compras').insert(comprasData)
       if (comprasError) throw comprasError
-
-      const movimentacoes = carrinho.map((item) => ({
-        produto_id: item.produto.id,
-        tipo: 'saida_lojinha' as const,
-        quantidade: item.quantidade,
-        custo_unit: null,
-        observacao: 'Venda lojinha',
-        usuario_id: usuarioId,
-        registrado_em: agora,
-      }))
-
-      const { error: movError } = await supabase.from('estoque_movimentacoes').insert(movimentacoes)
-      if (movError) throw movError
 
       // Notificar ADM via Slack se algum produto zerou na lojinha
       for (const item of carrinho) {

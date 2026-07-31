@@ -73,23 +73,9 @@ export default function RelatoriosPage() {
 
   async function handleDeleteCompra(compraId: string) {
     const supabase = createClient()
-    const compra = compras.find((c) => c.id === compraId)
-
+    // A baixa vinculada sai junto pela cascata de compra_id.
     const { error } = await supabase.from('compras').delete().eq('id', compraId)
     if (error) { toast.error('Erro ao excluir compra.'); return }
-
-    if (compra) {
-      const tsInicio = new Date(new Date(compra.comprado_em).getTime() - 60000).toISOString()
-      const tsFim = new Date(new Date(compra.comprado_em).getTime() + 60000).toISOString()
-      await supabase
-        .from('estoque_movimentacoes')
-        .delete()
-        .eq('tipo', 'saida_lojinha')
-        .eq('produto_id', compra.produto_id)
-        .eq('quantidade', compra.quantidade)
-        .gte('registrado_em', tsInicio)
-        .lte('registrado_em', tsFim)
-    }
 
     toast.success('Compra removida.')
     setCompras((prev) => prev.filter((c) => c.id !== compraId))
@@ -98,6 +84,7 @@ export default function RelatoriosPage() {
   async function handleAjustarQtd(compraId: string, novaQtd: number) {
     if (novaQtd < 1) return
     const supabase = createClient()
+    // A trigger sync_mov_venda propaga a nova quantidade para a baixa.
     const { error } = await supabase.from('compras').update({ quantidade: novaQtd }).eq('id', compraId)
     if (error) { toast.error('Erro ao ajustar quantidade.'); return }
     toast.success('Quantidade atualizada.')
