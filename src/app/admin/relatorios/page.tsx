@@ -9,8 +9,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Label } from '@/components/ui/label'
 import TabelaRelatorio from '@/components/relatorios/TabelaRelatorio'
 import toast from 'react-hot-toast'
-import { format } from 'date-fns'
-import { Download, FileText } from 'lucide-react'
+import { format, startOfWeek, endOfWeek } from 'date-fns'
+import { Send, FileText } from 'lucide-react'
 
 export default function RelatoriosPage() {
   const router = useRouter()
@@ -22,7 +22,7 @@ export default function RelatoriosPage() {
   const [horaFim, setHoraFim] = useState('23:59')
   const [compras, setCompras] = useState<Compra[]>([])
   const [previewAtivo, setPreviewAtivo] = useState(false)
-  const [gerandoPdf, setGerandoPdf] = useState(false)
+  const [enviandoSlack, setEnviandoSlack] = useState(false)
   const [carregando, setCarregando] = useState(false)
 
   useEffect(() => {
@@ -91,34 +91,29 @@ export default function RelatoriosPage() {
     setCompras((prev) => prev.map((c) => c.id === compraId ? { ...c, quantidade: novaQtd } : c))
   }
 
-  async function handleBaixarPdf() {
-    if (!usuarioId || !previewAtivo) return
-    setGerandoPdf(true)
-    const { inicio, fim } = getRange()
-    const periodoLabel = labelPeriodo()
+  async function handleEnviarSlack() {
+    if (!usuarioId) return
+    setEnviandoSlack(true)
+    // Semana do historico do usuario: sabado a sexta.
+    const agora = new Date()
+    const inicio = startOfWeek(agora, { weekStartsOn: 6 })
+    const fim = endOfWeek(agora, { weekStartsOn: 6 })
+    const periodoLabel = `${format(inicio, 'dd/MM/yyyy')} a ${format(fim, 'dd/MM/yyyy')}`
 
     try {
-      const res = await fetch('/api/pdf/relatorio', {
+      const res = await fetch('/api/slack/ficha', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ usuario_id: usuarioId, inicio: inicio.toISOString(), fim: fim.toISOString(), periodo_label: periodoLabel }),
       })
-
-      if (!res.ok) throw new Error('Erro ao gerar PDF')
-
-      const blob = await res.blob()
-      const url = URL.createObjectURL(blob)
-      const a = document.createElement('a')
-      const usuario = usuarios.find((u) => u.id === usuarioId)
-      a.href = url
-      a.download = `relatorio-${usuario?.nome?.replace(/\s+/g, '-').toLowerCase()}-${dataInicio}.pdf`
-      a.click()
-      URL.revokeObjectURL(url)
+      if (res.status === 422) { toast.error('Usuário sem ID do Slack cadastrado.'); return }
+      if (!res.ok) throw new Error('Erro ao enviar ficha')
+      toast.success('Ficha da semana enviada no Slack!')
     } catch (err) {
       console.error(err)
-      toast.error('Erro ao gerar PDF.')
+      toast.error('Erro ao enviar ficha no Slack.')
     } finally {
-      setGerandoPdf(false)
+      setEnviandoSlack(false)
     }
   }
 
@@ -194,12 +189,12 @@ export default function RelatoriosPage() {
                 <p className="text-sm text-gray-500">{labelPeriodo()}</p>
               </div>
               <button
-                onClick={handleBaixarPdf}
-                disabled={gerandoPdf || compras.length === 0}
+                onClick={handleEnviarSlack}
+                disabled={enviandoSlack}
                 className="flex items-center gap-2 bg-green-500 text-white rounded-lg px-4 py-2 text-sm font-semibold hover:bg-green-600 disabled:opacity-50"
               >
-                <Download size={15} />
-                {gerandoPdf ? 'Gerando...' : 'Baixar PDF'}
+                <Send size={15} />
+                {enviandoSlack ? 'Enviando...' : 'Enviar semana no Slack'}
               </button>
             </div>
             <div className="p-5">

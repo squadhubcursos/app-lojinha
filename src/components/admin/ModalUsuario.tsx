@@ -24,6 +24,7 @@ export default function ModalUsuario({ open, onClose, onSaved, usuario }: Props)
   const [perfil, setPerfil] = useState<'usuario' | 'admin'>('usuario')
   const [senha, setSenha] = useState('')
   const [ativo, setAtivo] = useState(true)
+  const [slackUserId, setSlackUserId] = useState('')
   const [salvando, setSalvando] = useState(false)
   const [fotoPreview, setFotoPreview] = useState<string | null>(null)
   const [fotoFile, setFotoFile] = useState<File | null>(null)
@@ -34,11 +35,12 @@ export default function ModalUsuario({ open, onClose, onSaved, usuario }: Props)
       setNome(usuario.nome)
       setPerfil(usuario.perfil)
       setAtivo(usuario.ativo)
+      setSlackUserId(usuario.slack_user_id ?? '')
       setSenha('')
       setFotoPreview(usuario.foto_url ?? null)
       setFotoFile(null)
     } else {
-      setNome(''); setPerfil('usuario'); setSenha(''); setAtivo(true)
+      setNome(''); setPerfil('usuario'); setSenha(''); setAtivo(true); setSlackUserId('')
       setFotoPreview(null); setFotoFile(null)
     }
   }, [usuario, open])
@@ -65,7 +67,7 @@ export default function ModalUsuario({ open, onClose, onSaved, usuario }: Props)
     setSalvando(true)
     const supabase = createClient()
 
-    const payload: Record<string, unknown> = { nome, perfil, ativo }
+    const payload: Record<string, unknown> = { nome, perfil, ativo, slack_user_id: slackUserId.trim() || null }
 
     if (perfil === 'admin' && senha) {
       payload.senha_hash = await bcrypt.hash(senha, 10)
@@ -150,6 +152,11 @@ export default function ModalUsuario({ open, onClose, onSaved, usuario }: Props)
                 <SelectItem value="admin">Admin</SelectItem>
               </SelectContent>
             </Select>
+          </div>
+
+          <div>
+            <Label>ID do Slack</Label>
+            <Input value={slackUserId} onChange={(e) => setSlackUserId(e.target.value)} className="mt-1" placeholder="Ex: U01ABCDEF" />
           </div>
 
           {perfil === 'admin' && (

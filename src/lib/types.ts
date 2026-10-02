@@ -9,6 +9,7 @@ export interface Usuario {
   ativo: boolean
   criado_em: string
   foto_url?: string | null
+  slack_user_id?: string | null
 }
 
 export interface Produto {
