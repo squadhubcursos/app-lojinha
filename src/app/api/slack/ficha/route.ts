@@ -2,51 +2,28 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { gerarRelatorioPdf } from '@/lib/pdf-relatorio'
 
-const SLACK_BOT_TOKEN = process.env.SLACK_BOT_TOKEN
+const WEBHOOK_URL = process.env.N8N_FICHA_WEBHOOK_URL
+const WEBHOOK_SECRET = process.env.N8N_FICHA_WEBHOOK_SECRET
 
-async function slackJson(method: string, body: object) {
-  const res = await fetch(`https://slack.com/api/${method}`, {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${SLACK_BOT_TOKEN}`,
-      'Content-Type': 'application/json; charset=utf-8',
-    },
-    body: JSON.stringify(body),
-  })
-  return res.json()
-}
-
-// Envia o PDF por DM usando o fluxo de upload externo do Slack (files.upload foi descontinuado).
+// O workflow do n8n abre a DM e anexa o PDF usando a credencial do SquadBuddy.
 async function enviarPdfPorDM(slackUserId: string, buffer: Buffer, filename: string, comentario: string) {
-  const dm = await slackJson('conversations.open', { users: slackUserId })
-  if (!dm.ok) throw new Error(`conversations.open: ${dm.error}`)
-
-  const params = new URLSearchParams({ filename, length: String(buffer.length) })
-  const urlRes = await fetch(`https://slack.com/api/files.getUploadURLExternal?${params}`, {
-    headers: { Authorization: `Bearer ${SLACK_BOT_TOKEN}` },
-  })
-  const urlData = await urlRes.json()
-  if (!urlData.ok) throw new Error(`files.getUploadURLExternal: ${urlData.error}`)
-
-  const upload = await fetch(urlData.upload_url, {
+  const res = await fetch(WEBHOOK_URL!, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/pdf' },
-    body: new Uint8Array(buffer),
+    headers: { 'Content-Type': 'application/json', 'x-ficha-secret': WEBHOOK_SECRET! },
+    body: JSON.stringify({
+      slack_user_id: slackUserId,
+      filename,
+      comment: comentario,
+      pdf_base64: buffer.toString('base64'),
+    }),
   })
-  if (!upload.ok) throw new Error(`upload do arquivo falhou: ${upload.status}`)
-
-  const done = await slackJson('files.completeUploadExternal', {
-    files: [{ id: urlData.file_id, title: filename }],
-    channel_id: dm.channel.id,
-    initial_comment: comentario,
-  })
-  if (!done.ok) throw new Error(`files.completeUploadExternal: ${done.error}`)
+  if (!res.ok) throw new Error(`webhook n8n respondeu ${res.status}: ${await res.text()}`)
 }
 
 export async function POST(request: NextRequest) {
-  if (!SLACK_BOT_TOKEN) {
-    console.error('[Slack] SLACK_BOT_TOKEN não configurado.')
-    return NextResponse.json({ error: 'Slack não configurado' }, { status: 500 })
+  if (!WEBHOOK_URL || !WEBHOOK_SECRET) {
+    console.error('[Slack] N8N_FICHA_WEBHOOK_URL ou N8N_FICHA_WEBHOOK_SECRET não configurados.')
+    return NextResponse.json({ error: 'Envio não configurado' }, { status: 500 })
   }
 
   const { usuario_id, inicio, fim, periodo_label } = await request.json()
