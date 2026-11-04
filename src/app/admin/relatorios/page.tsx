@@ -9,7 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Label } from '@/components/ui/label'
 import TabelaRelatorio from '@/components/relatorios/TabelaRelatorio'
 import toast from 'react-hot-toast'
-import { format, startOfWeek, endOfWeek } from 'date-fns'
+import { format } from 'date-fns'
 import { Send, FileText } from 'lucide-react'
 
 export default function RelatoriosPage() {
@@ -94,11 +94,9 @@ export default function RelatoriosPage() {
   async function handleEnviarSlack() {
     if (!usuarioId) return
     setEnviandoSlack(true)
-    // Semana do historico do usuario: sabado a sexta.
-    const agora = new Date()
-    const inicio = startOfWeek(agora, { weekStartsOn: 6 })
-    const fim = endOfWeek(agora, { weekStartsOn: 6 })
-    const periodoLabel = `${format(inicio, 'dd/MM/yyyy')} a ${format(fim, 'dd/MM/yyyy')}`
+    // Usa o mesmo periodo (data e hora) filtrado na previa.
+    const { inicio, fim } = getRange()
+    const periodoLabel = labelPeriodo()
 
     try {
       const res = await fetch('/api/slack/ficha', {
@@ -108,7 +106,7 @@ export default function RelatoriosPage() {
       })
       if (res.status === 422) { toast.error('Usuário sem ID do Slack cadastrado.'); return }
       if (!res.ok) throw new Error('Erro ao enviar ficha')
-      toast.success('Ficha da semana enviada no Slack!')
+      toast.success('Ficha do período enviada no Slack!')
     } catch (err) {
       console.error(err)
       toast.error('Erro ao enviar ficha no Slack.')
@@ -194,7 +192,7 @@ export default function RelatoriosPage() {
                 className="flex items-center gap-2 bg-green-500 text-white rounded-lg px-4 py-2 text-sm font-semibold hover:bg-green-600 disabled:opacity-50"
               >
                 <Send size={15} />
-                {enviandoSlack ? 'Enviando...' : 'Enviar semana no Slack'}
+                {enviandoSlack ? 'Enviando...' : 'Enviar período no Slack'}
               </button>
             </div>
             <div className="p-5">
